@@ -47,9 +47,14 @@ export default function Home() {
         msg = rawDetail.map((e: any) => e.msg ?? JSON.stringify(e)).join('; ');
       } else if (typeof rawDetail === 'string') {
         msg = rawDetail;
+      } else if (err?.response?.status) {
+        msg = `Sunucu hatası (${err.response.status})`;
+      } else if (err?.message) {
+        msg = `Bağlantı hatası: ${err.message}`;
       } else {
         msg = 'Analiz başlatılamadı';
       }
+      console.error('[createAnalysis]', err?.response?.status, err?.message, err?.response?.data);
       toast.error(msg);
       setLoading(false);
     }

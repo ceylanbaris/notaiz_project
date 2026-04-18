@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import Response
@@ -78,13 +77,13 @@ async def create_analysis(
 
 @router.get("/analyze/{analysis_id}", response_model=AnalysisOut)
 def get_analysis(
-    analysis_id: UUID,
+    analysis_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     analysis = (
         db.query(Analysis)
-        .filter(Analysis.id == analysis_id, Analysis.user_id == current_user.id)
+        .filter(Analysis.id == analysis_id, Analysis.user_id == str(current_user.id))
         .first()
     )
     if not analysis:
@@ -115,13 +114,13 @@ def get_history(
 
 @router.get("/analyze/{analysis_id}/pdf")
 def download_pdf(
-    analysis_id: UUID,
+    analysis_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     analysis = (
         db.query(Analysis)
-        .filter(Analysis.id == analysis_id, Analysis.user_id == current_user.id)
+        .filter(Analysis.id == analysis_id, Analysis.user_id == str(current_user.id))
         .first()
     )
     if not analysis:
@@ -155,17 +154,17 @@ def download_pdf(
 # ── SSE /analyze/{id}/progress ────────────────────────────────────────
 
 @router.get("/analyze/{analysis_id}/progress")
-async def analysis_progress(analysis_id: UUID, db: Session = Depends(get_db)):
+async def analysis_progress(analysis_id: str, db: Session = Depends(get_db)):
     """Stream analysis progress via Server-Sent Events (in-memory queue, no Redis)."""
 
-    analysis_id_str = str(analysis_id)
+    analysis_id_str = analysis_id
 
     async def event_generator():
         queue = get_queue(analysis_id_str)
 
         if queue is None:
             # Task already finished before SSE connected — read DB and report final state
-            row = db.query(Analysis).filter(Analysis.id == analysis_id).first()
+            row = db.query(Analysis).filter(Analysis.id == analysis_id_str).first()
             if row and row.status == "completed":
                 yield {"event": "progress", "data": json.dumps({
                     "analysis_id": analysis_id_str, "step": "done",
