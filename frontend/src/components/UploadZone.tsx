@@ -74,18 +74,20 @@ export default function UploadZone({ label, file, onFileDrop, onRemove }: Upload
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            {...getRootProps()}
-            className={`
-              cursor-pointer rounded-2xl border-2 border-dashed p-8
-              flex flex-col items-center justify-center gap-3
-              transition-all duration-300
-              ${
-                isDragActive
-                  ? 'border-primary-400 bg-primary-500/10 scale-[1.02]'
-                  : 'border-surface-600 hover:border-primary-500/50 hover:bg-surface-800/50'
-              }
-            `}
           >
+            <div
+              {...getRootProps()}
+              className={`
+                cursor-pointer rounded-2xl border-2 border-dashed p-8
+                flex flex-col items-center justify-center gap-3
+                transition-all duration-300
+                ${
+                  isDragActive
+                    ? 'border-primary-400 bg-primary-500/10 scale-[1.02]'
+                    : 'border-surface-600 hover:border-primary-500/50 hover:bg-surface-800/50'
+                }
+              `}
+            >
             <input {...getInputProps()} />
             <div
               className={`p-3 rounded-xl transition-colors ${
@@ -99,6 +101,7 @@ export default function UploadZone({ label, file, onFileDrop, onRemove }: Upload
                 {isDragActive ? 'Dosyayı bırakın' : 'Sürükle & bırak veya tıkla'}
               </p>
               <p className="text-xs text-surface-500 mt-1">MP3, WAV, FLAC, OGG — max 50MB</p>
+            </div>
             </div>
           </motion.div>
         )}
