@@ -1,109 +1,70 @@
-"""Similarity engine — computes pairwise similarity between two AudioFeatures.
+"""Similarity engine — multi-metric audio comparison.
 
-Implements spec §5.4:
-  1. Cosine Similarity           (MFCC + Mel)    → weight 0.40
-  2. Beat-synchronous DTW        (Chroma)        → weight 0.40
-  3. Pearson Correlation          (Tempogram)     → weight 0.20
-  4. Fused score = weighted sum
+Metrics:
+  melodic    : key-invariant cosine on CQT-Chroma column means (12 transpositions)
+  harmonic   : key-invariant cosine on HPCP column means (12 transpositions)
+  rhythmic   : cosine on Tempogram column means (no transposition)
+  structural : Audio Fingerprinting via Constellation Maps (Shazam-style)
+
+Fused score: 0.20*melodic + 0.15*harmonic + 0.10*rhythmic + 0.55*structural
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import List, Set, Tuple
 
+import librosa
 import numpy as np
-from scipy.spatial.distance import cosine as cosine_dist
-from scipy.spatial.distance import euclidean
-from scipy.stats import pearsonr
+from librosa.sequence import dtw
+from scipy.ndimage import maximum_filter
 
 from app.core.config import settings
 from app.services.feature_extractor import AudioFeatures
 
+_SR = 22050
+_N_FFT = 2048
+_HOP = 512
+_FILTER_SIZE = 20
+_TIME_WINDOW = 15
+_FAN_OUT = 5
+_THRESHOLD_STD = 1.0
+
 
 @dataclass
 class SimilarityResult:
-    cosine_similarity: float
-    dtw_distance_normalized: float
-    correlation: float
+    melodic_similarity: float
+    rhythmic_similarity: float
+    harmonic_similarity: float
+    structural_similarity: float
     fused_score: float
     risk_level: str
     uncertainty: float
     alignment_path: List[List[float]]
+    category: str = ""
+    category_label_tr: str = ""
+    confidence: float = 0.0
+    explanation_tr: str = ""
+    key_observation: str = ""
+    melodic_dtw_similarity: float = 0.0
 
 
-# ── Helpers ───────────────────────────────────────────────────────────
+def _melodic_dtw_similarity(chroma_a, chroma_b) -> float:
+    best_score = 0.0
+    # İşlem çok uzamasın diye gerekirse matrisleri seyrelt (downsample)
+    if chroma_a.shape[1] > 1000: chroma_a = chroma_a[:, ::2]
+    if chroma_b.shape[1] > 1000: chroma_b = chroma_b[:, ::2]
 
-def _mean_vector(matrix: np.ndarray) -> np.ndarray:
-    """Collapse time axis → single vector (mean across columns)."""
-    return np.mean(matrix, axis=1)
-
-
-def _cosine_sim(a: np.ndarray, b: np.ndarray) -> float:
-    """Cosine similarity between two vectors (1 = identical)."""
-    d = cosine_dist(a, b)  # scipy returns *distance*
-    return float(np.clip(1.0 - d, 0.0, 1.0))
-
-
-def _dtw_normalised(chroma_a: np.ndarray, chroma_b: np.ndarray) -> Tuple[float, List[List[float]]]:
-    """Simple DTW on chroma features.
-
-    Returns
-    -------
-    (score, alignment_path)
-        score ∈ [0, 1] where 1 = identical.
-    """
-    from scipy.spatial.distance import cdist
-
-    # Cost matrix
-    D = cdist(chroma_a.T, chroma_b.T, metric="cosine")
-    n, m = D.shape
-
-    # Accumulated cost matrix
-    C = np.full((n + 1, m + 1), np.inf)
-    C[0, 0] = 0.0
-    for i in range(1, n + 1):
-        for j in range(1, m + 1):
-            C[i, j] = D[i - 1, j - 1] + min(C[i - 1, j], C[i, j - 1], C[i - 1, j - 1])
-
-    # Normalised distance
-    path_len = n + m  # upper bound for path length
-    norm_dist = C[n, m] / path_len if path_len > 0 else 0.0
-    score = float(np.clip(1.0 - norm_dist, 0.0, 1.0))
-
-    # Back-trace alignment path (subsampled for JSON size)
-    path: List[List[float]] = []
-    i, j = n, m
-    while i > 0 and j > 0:
-        path.append([float(i - 1), float(j - 1)])
-        candidates = [
-            (C[i - 1, j - 1], i - 1, j - 1),
-            (C[i - 1, j], i - 1, j),
-            (C[i, j - 1], i, j - 1),
-        ]
-        _, i, j = min(candidates, key=lambda x: x[0])
-    path.reverse()
-
-    # Subsample to max 200 points
-    if len(path) > 200:
-        step = len(path) // 200
-        path = path[::step]
-
-    return score, path
-
-
-def _pearson_corr(tempogram_a: np.ndarray, tempogram_b: np.ndarray) -> float:
-    """Mean Pearson correlation across tempo bins (mean vectors)."""
-    va = _mean_vector(tempogram_a)
-    vb = _mean_vector(tempogram_b)
-    # Truncate to shortest
-    min_len = min(len(va), len(vb))
-    va = va[:min_len]
-    vb = vb[:min_len]
-    if min_len < 2:
-        return 0.0
-    r, _ = pearsonr(va, vb)
-    return float(np.clip(r, 0.0, 1.0))
+    for shift in range(12):
+        chroma_b_shifted = np.roll(chroma_b, shift, axis=0)
+        try:
+            D, wp = dtw(X=chroma_a, Y=chroma_b_shifted, metric='cosine')
+            normalized_cost = D[-1, -1] / len(wp)
+            score = max(0.0, 1.0 - normalized_cost)
+            if score > best_score: best_score = score
+        except Exception:
+            continue
+    return float(best_score)
 
 
 def _classify_risk(score: float) -> str:
@@ -114,39 +75,165 @@ def _classify_risk(score: float) -> str:
     return "low"
 
 
-# ── Public API ────────────────────────────────────────────────────────
+def _categorize(fused: float) -> str:
+    if fused >= 0.85:
+        return "cover_or_same"
+    if fused >= 0.60:
+        return "high_similarity"
+    if fused >= 0.30:
+        return "moderate_similarity"
+    return "low_similarity"
+
+
+def _cosine_sim(a: np.ndarray, b: np.ndarray) -> float:
+    """Cosine similarity between two 1-D vectors. Returns 0.0 if either is zero."""
+    norm_a = np.linalg.norm(a)
+    norm_b = np.linalg.norm(b)
+    if norm_a == 0.0 or norm_b == 0.0:
+        return 0.0
+    return float(np.clip(np.dot(a, b) / (norm_a * norm_b), 0.0, 1.0))
+
+
+def _key_invariant_cosine(mat_a: np.ndarray, mat_b: np.ndarray) -> float:
+    """Column-mean cosine similarity maximised over 12 semitone transpositions."""
+    vec_a = mat_a.mean(axis=1)
+    vec_b = mat_b.mean(axis=1)
+    return max(_cosine_sim(np.roll(vec_a, shift), vec_b) for shift in range(12))
+
+
+def _log_spectrogram(y: np.ndarray) -> np.ndarray:
+    """Log-magnitude STFT, shape (freq_bins, time_bins)."""
+    S = np.abs(librosa.stft(y, n_fft=_N_FFT, hop_length=_HOP))
+    return np.log1p(S)
+
+
+def _constellation_map(spec: np.ndarray) -> List[Tuple[int, int]]:
+    """Return local maxima above threshold as (time_bin, freq_bin) list."""
+    local_max = maximum_filter(spec, size=(_FILTER_SIZE, _FILTER_SIZE))
+    is_peak = spec == local_max
+    threshold = spec.mean() + _THRESHOLD_STD * spec.std()
+    is_peak &= spec > threshold
+    freq_idx, time_idx = np.where(is_peak)
+    return sorted(zip(time_idx.tolist(), freq_idx.tolist()))
+
+
+def _build_hashes(peaks: List[Tuple[int, int]]) -> Set[int]:
+    """Hash anchor-target pairs into a fingerprint set."""
+    hashes: Set[int] = set()
+    n = len(peaks)
+    for i, (t_anchor, f_anchor) in enumerate(peaks):
+        targets_found = 0
+        for j in range(i + 1, n):
+            t_target, f_target = peaks[j]
+            dt = t_target - t_anchor
+            if dt > _TIME_WINDOW:
+                break
+            if targets_found >= _FAN_OUT:
+                break
+            hashes.add(f_anchor * 100000 + f_target * 1000 + dt)
+            targets_found += 1
+    return hashes
+
+
+def _fingerprint_score(spec_a: np.ndarray, spec_b: np.ndarray) -> float:
+    peaks_a = _constellation_map(spec_a)
+    peaks_b = _constellation_map(spec_b)
+
+    if not peaks_a or not peaks_b:
+        return 0.0
+
+    hash_a = _build_hashes(peaks_a)
+    hash_b = _build_hashes(peaks_b)
+
+    if not hash_a or not hash_b:
+        return 0.0
+
+    common = hash_a & hash_b
+    score = float(np.clip(len(common) / min(len(hash_a), len(hash_b)), 0.0, 1.0))
+
+    print(
+        f"[NOTAIZ] score={score:.4f}"
+        f"  peaks=({len(peaks_a)},{len(peaks_b)})"
+        f"  hashes=({len(hash_a)},{len(hash_b)})"
+        f"  common={len(common)}",
+        flush=True,
+    )
+    return score
+
+
+def compare_songs(path_a: str, path_b: str) -> float:
+    """Load two audio files and return fingerprint similarity score [0.0, 1.0]."""
+    y_a, _ = librosa.load(path_a, sr=_SR, mono=True)
+    y_b, _ = librosa.load(path_b, sr=_SR, mono=True)
+    return _fingerprint_score(_log_spectrogram(y_a), _log_spectrogram(y_b))
+
 
 def compute_similarity(fa: AudioFeatures, fb: AudioFeatures) -> SimilarityResult:
-    """Compare two feature sets and return a fused similarity result."""
+    """Compute multi-metric similarity from AudioFeatures."""
+    from app.services.llm_interpreter import interpret_similarity
 
-    # 1. Cosine similarity (MFCC + Mel averaged)
-    cos_mfcc = _cosine_sim(_mean_vector(fa.mfcc), _mean_vector(fb.mfcc))
-    cos_mel = _cosine_sim(_mean_vector(fa.log_mel), _mean_vector(fb.log_mel))
-    cosine_score = (cos_mfcc + cos_mel) / 2.0
+    melodic    = round(_key_invariant_cosine(fa.chroma_cqt, fb.chroma_cqt), 4)
+    harmonic   = round(_key_invariant_cosine(fa.hpcp, fb.hpcp), 4)
+    rhythmic   = round(_cosine_sim(fa.tempogram.mean(axis=1), fb.tempogram.mean(axis=1)), 4)
+    structural = round(_fingerprint_score(fa.log_mel, fb.log_mel), 4)
 
-    # 2. DTW on chroma
-    dtw_score, alignment_path = _dtw_normalised(fa.chroma_cqt, fb.chroma_cqt)
+    melodic_dtw = round(_melodic_dtw_similarity(fa.chroma_cqt, fb.chroma_cqt), 4)
 
-    # 3. Pearson correlation on tempogram
-    corr_score = _pearson_corr(fa.tempogram, fb.tempogram)
+    # AKILLI KARAR AĞACI (SMART SCORING) - STRICT VERSİYON + İNTİHAL KURALI
+    if structural >= 0.10:
+        # 1. Birebir Aynı / Kesin İntihal / Heavy Sample (Beklenen: %75 - %100)
+        raw_fused = 0.75 + min(0.25, (structural - 0.10) * 1.5)
+    elif melodic_dtw >= 0.95:
+        # 2. Cover Şarkı (Yapısal düşük ama melodi akışı birebir aynı) (Beklenen: %70 - %95)
+        raw_fused = 0.70 + min(0.25, (melodic_dtw - 0.95) * 5)
+    elif melodic_dtw >= 0.85 and structural >= 0.04:
+        # 3. YENİ KURAL: Melodi Hırsızlığı / İntihal (Altyapı farklı ama ana melodi kopyalanmış) (Beklenen: %65 - %85)
+        raw_fused = 0.65 + min(0.20, (melodic_dtw - 0.85) * 2)
+    elif structural >= 0.065:
+        # 4. Yüksek/Orta Benzerlik - Tartışmalı (Beklenen: %45 - %64)
+        raw_fused = 0.45 + min(0.19, (structural - 0.065) * 5)
+    else:
+        # 5. Farklı Şarkılar (Beklenen: %10 - %35)
+        raw_fused = 0.10 + (melodic_dtw * 0.15) + (structural * 1.5)
 
-    # 4. Fused score
-    fused = (
-        settings.WEIGHT_COSINE * cosine_score
-        + settings.WEIGHT_DTW * dtw_score
-        + settings.WEIGHT_CORRELATION * corr_score
+    fused = round(min(1.0, max(0.0, raw_fused)), 4)
+
+    print(
+        f"[NOTAIZ] melodic={melodic:.4f}  harmonic={harmonic:.4f}"
+        f"  rhythmic={rhythmic:.4f}  structural={structural:.4f}"
+        f"  melodic_dtw={melodic_dtw:.4f}  fused={fused:.4f}",
+        flush=True,
     )
-    fused = float(np.clip(fused, 0.0, 1.0))
 
-    # Uncertainty = std dev of the three metrics
-    uncertainty = float(np.std([cosine_score, dtw_score, corr_score]))
-
-    return SimilarityResult(
-        cosine_similarity=round(cosine_score, 4),
-        dtw_distance_normalized=round(dtw_score, 4),
-        correlation=round(corr_score, 4),
-        fused_score=round(fused, 4),
+    result = SimilarityResult(
+        melodic_similarity=melodic,
+        rhythmic_similarity=rhythmic,
+        harmonic_similarity=harmonic,
+        structural_similarity=structural,
+        fused_score=fused,
         risk_level=_classify_risk(fused),
-        uncertainty=round(uncertainty, 4),
-        alignment_path=alignment_path,
+        uncertainty=0.0,
+        alignment_path=[],
+        category=_categorize(fused),
+        melodic_dtw_similarity=melodic_dtw,
     )
+
+    file_a_name = getattr(fa, "filename", "Sarki A")
+    file_b_name = getattr(fb, "filename", "Sarki B")
+    interp = interpret_similarity(
+        melodic=melodic,
+        harmonic=harmonic,
+        rhythmic=rhythmic,
+        structural=structural,
+        fused=fused,
+        melodic_dtw=melodic_dtw,
+        file_a_name=file_a_name,
+        file_b_name=file_b_name,
+    )
+    result.category = interp["category"]
+    result.category_label_tr = interp["category_label_tr"]
+    result.confidence = interp["confidence"]
+    result.explanation_tr = interp["explanation_tr"]
+    result.key_observation = interp["key_observation"]
+
+    return result

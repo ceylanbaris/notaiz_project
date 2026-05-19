@@ -1,18 +1,19 @@
 """Feature extraction module.
 
-Extracts from each audio signal (per spec §5.3):
+Extracts from each audio signal:
   - MFCC (13 coefficients)
   - Log-Mel Spectrogram
   - CQT-Chroma
   - HPCP (Harmonic Pitch Class Profile)
   - Tempogram
-All feature vectors are L2-normalised.
+  - 4-bar audio segments (for Szymkiewicz-Simpson melodic comparison)
+All feature matrices are L2-normalised where applicable.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict
+from typing import Dict, List
 
 import librosa
 import numpy as np
@@ -31,9 +32,11 @@ class AudioFeatures:
     chroma_cqt: np.ndarray    # (12, T)
     hpcp: np.ndarray          # (12, T)
     tempogram: np.ndarray     # (win_length, T)
+    segments: List[np.ndarray] = field(default_factory=list)  # 4-bar audio chunks (not serialized)
+    sr: int = 22050           # sample rate for segment re-analysis (not serialized)
 
     def to_serialisable(self) -> Dict[str, list]:
-        """Convert numpy arrays to JSON-safe lists."""
+        """Convert numpy arrays to JSON-safe lists (segments/sr excluded)."""
         return {
             "mfcc": self.mfcc.tolist(),
             "log_mel": self.log_mel.tolist(),
@@ -61,6 +64,37 @@ def _l2_norm(matrix: np.ndarray) -> np.ndarray:
     return normalize(matrix, axis=0, norm="l2")
 
 
+def _extract_4bar_segments(audio: ProcessedAudio) -> List[np.ndarray]:
+    """Split audio into non-overlapping 4-bar segments via beat tracking.
+
+    Falls back to equal 8-second chunks when beat tracking yields fewer than
+    2 segments (very short or arhythmic audio).
+    """
+    y = audio.signal
+    sr = audio.sr
+    beats_per_segment = settings.BEATS_PER_BAR * settings.BARS_PER_SEGMENT  # 16 beats
+
+    try:
+        _, beat_frames = librosa.beat.beat_track(y=y, sr=sr, hop_length=settings.HOP_LENGTH)
+        beat_samples = librosa.frames_to_samples(beat_frames, hop_length=settings.HOP_LENGTH)
+
+        segments: List[np.ndarray] = []
+        for i in range(0, len(beat_samples) - beats_per_segment + 1, beats_per_segment):
+            start = int(beat_samples[i])
+            end = int(beat_samples[min(i + beats_per_segment, len(beat_samples) - 1)])
+            seg = y[start:end]
+            if len(seg) >= sr // 2:
+                segments.append(seg)
+    except Exception:
+        segments = []
+
+    if len(segments) < 2:
+        chunk_len = int(sr * 8)
+        segments = [y[i:i + chunk_len] for i in range(0, len(y) - chunk_len + 1, chunk_len)]
+
+    return segments
+
+
 def extract_features(audio: ProcessedAudio) -> AudioFeatures:
     """Extract all feature sets from a pre-processed audio signal.
 
@@ -78,26 +112,20 @@ def extract_features(audio: ProcessedAudio) -> AudioFeatures:
     n_fft = settings.N_FFT
     hop = settings.HOP_LENGTH
 
-    # 1. MFCC
     mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=settings.N_MFCC, n_fft=n_fft, hop_length=hop)
-    mfcc = _l2_norm(mfcc)
 
-    # 2. Log-Mel Spectrogram
     mel = librosa.feature.melspectrogram(y=y, sr=sr, n_fft=n_fft, hop_length=hop, n_mels=128)
     log_mel = librosa.power_to_db(mel, ref=np.max)
-    log_mel = _l2_norm(log_mel)
 
-    # 3. CQT-Chroma
     chroma_cqt = librosa.feature.chroma_cqt(y=y, sr=sr, hop_length=hop)
     chroma_cqt = _l2_norm(chroma_cqt)
 
-    # 4. HPCP — approximated via chroma_cens (librosa's closest equivalent)
     hpcp = librosa.feature.chroma_cens(y=y, sr=sr, hop_length=hop)
     hpcp = _l2_norm(hpcp)
 
-    # 5. Tempogram
     tempogram = librosa.feature.tempogram(y=y, sr=sr, hop_length=hop)
-    tempogram = _l2_norm(tempogram)
+
+    segments = _extract_4bar_segments(audio)
 
     return AudioFeatures(
         mfcc=mfcc,
@@ -105,4 +133,6 @@ def extract_features(audio: ProcessedAudio) -> AudioFeatures:
         chroma_cqt=chroma_cqt,
         hpcp=hpcp,
         tempogram=tempogram,
+        segments=segments,
+        sr=sr,
     )

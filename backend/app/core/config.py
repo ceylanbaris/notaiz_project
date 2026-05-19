@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     # ── Google OAuth ──────────────────────────────────────────────────
     GOOGLE_CLIENT_ID: str = ""
 
+    # ── Gemini AI ─────────────────────────────────────────────────────────
+    GEMINI_API_KEY: str = ""
+
     # ── CORS ──────────────────────────────────────────────────────────
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
 
@@ -45,20 +48,26 @@ class Settings(BaseSettings):
     N_MFCC: int = 13
     TOP_DB: int = 20
 
-    # ── Similarity weights ────────────────────────────────────────────
-    WEIGHT_COSINE: float = 0.40
-    WEIGHT_DTW: float = 0.40
-    WEIGHT_CORRELATION: float = 0.20
+    # ── Similarity weights (Weighted Multi-dimensional Similarity) ────
+    # S_total = W_m*S_m + W_r*S_r + W_h*S_h + W_y*S_y
+    WEIGHT_MELODIC: float = 0.40      # W_m  Szymkiewicz-Simpson (melodik)
+    WEIGHT_RHYTHMIC: float = 0.25     # W_r  DTW tempogram (ritmik)
+    WEIGHT_HARMONIC: float = 0.15     # W_h  Cosine HPCP (armonik)
+    WEIGHT_STRUCTURAL: float = 0.20   # W_y  Cosine MFCC+Mel (yapısal)
+
+    # ── Segmentation ──────────────────────────────────────────────────
+    BARS_PER_SEGMENT: int = 4
+    BEATS_PER_BAR: int = 4
 
     # ── Risk thresholds ───────────────────────────────────────────────
-    THRESHOLD_LOW: float = 0.45
-    THRESHOLD_HIGH: float = 0.70
+    THRESHOLD_LOW: float = 0.30
+    THRESHOLD_HIGH: float = 0.85
 
     # ── File TTL (seconds) ────────────────────────────────────────────
     FILE_TTL_SECONDS: int = 3600  # 1 hour
 
     model_config = {
-        "env_file": ".env",
+        "env_file": str(Path(__file__).resolve().parent.parent.parent / ".env"),
         "env_file_encoding": "utf-8",
         "case_sensitive": True,
     }

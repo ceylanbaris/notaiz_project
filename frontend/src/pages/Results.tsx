@@ -11,11 +11,15 @@ import {
   Timer,
   AlertTriangle,
   Info,
+  ShieldCheck,
+  Shield,
+  ShieldAlert,
+  Eye,
 } from 'lucide-react';
 import { getAnalysis, getAnalysisPdfUrl } from '../services/api';
-import type { Analysis } from '../types';
+import type { Analysis, CategoryType } from '../types';
+import { CATEGORY_COLORS, CATEGORY_LABELS } from '../types';
 import SimilarityGauge from '../components/SimilarityGauge';
-import RiskBadge from '../components/RiskBadge';
 import MetricChart from '../components/MetricChart';
 import AlignmentMap from '../components/AlignmentMap';
 
@@ -27,6 +31,35 @@ const fadeUp = {
 const stagger = {
   animate: { transition: { staggerChildren: 0.1 } },
 };
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type CategoryIcon = React.ComponentType<any>;
+
+const CATEGORY_ICONS: Record<CategoryType, CategoryIcon> = {
+  low_similarity:      ShieldCheck,
+  moderate_similarity: Shield,
+  high_similarity:     ShieldAlert,
+  cover_or_same:       AlertTriangle,
+};
+
+function CategoryBadge({ category }: { category: string }) {
+  const cat = (category || 'moderate_similarity') as CategoryType;
+  const color = CATEGORY_COLORS[cat] ?? '#f59e0b';
+  const label = CATEGORY_LABELS[cat] ?? category;
+  const Icon  = CATEGORY_ICONS[cat] ?? Shield;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="inline-flex items-center gap-2 rounded-full font-semibold border px-5 py-2.5 text-base"
+      style={{ color, borderColor: `${color}33`, backgroundColor: `${color}10` }}
+    >
+      <Icon size={20} />
+      {label}
+    </motion.div>
+  );
+}
 
 export default function ResultsPage() {
   const { id } = useParams<{ id: string }>();
@@ -74,7 +107,10 @@ export default function ResultsPage() {
     );
   }
 
-  const riskLevel = analysis.risk_level || 'low';
+  const riskLevel  = analysis.risk_level || 'low';
+  const category   = analysis.category   || 'moderate_similarity';
+  const catColor   = CATEGORY_COLORS[category as CategoryType] ?? '#f59e0b';
+  const hasLLM     = !!(analysis.explanation_tr || analysis.key_observation);
 
   return (
     <motion.div
@@ -109,7 +145,7 @@ export default function ResultsPage() {
           {/* Info */}
           <div className="flex-1 text-center lg:text-left">
             <div className="mb-4">
-              <RiskBadge risk={riskLevel as any} large />
+              <CategoryBadge category={category} />
             </div>
             <h1 className="text-2xl font-display font-bold text-white mb-4">
               Analiz Sonuçları
@@ -193,25 +229,61 @@ export default function ResultsPage() {
             Metrik Detayları
           </h2>
           <MetricChart metrics={analysis.metrics} />
+        </motion.div>
+      )}
 
-          {/* Metric values */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
-            {[
-              { label: 'Cosine', value: analysis.metrics.cosine_similarity, color: '#818cf8' },
-              { label: 'DTW', value: analysis.metrics.dtw_distance_normalized, color: '#a78bfa' },
-              { label: 'Korelasyon', value: analysis.metrics.correlation, color: '#c084fc' },
-              { label: 'Fused', value: analysis.metrics.fused_score, color: '#6366f1' },
-            ].map((m) => (
-              <div
-                key={m.label}
-                className="p-3 rounded-xl bg-white/[0.03] border border-white/5 text-center"
+      {/* LLM Interpretation */}
+      {hasLLM && (
+        <motion.div variants={fadeUp} className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+          {/* AI Assessment */}
+          <div className="glass-card p-6">
+            <div className="flex items-center gap-2 mb-3">
+              <Shield size={16} style={{ color: catColor }} />
+              <h2 className="text-base font-display font-semibold text-white">
+                AI Değerlendirmesi
+              </h2>
+            </div>
+
+            {analysis.category_label_tr && (
+              <p
+                className="text-xl font-bold mb-2"
+                style={{ color: catColor }}
               >
-                <p className="text-xs text-slate-500 mb-1">{m.label}</p>
-                <p className="text-lg font-bold" style={{ color: m.color }}>
-                  {(m.value * 100).toFixed(1)}%
-                </p>
-              </div>
-            ))}
+                {analysis.category_label_tr}
+              </p>
+            )}
+
+            {analysis.confidence > 0 && (
+              <p className="text-xs text-slate-500 mb-3">
+                Güven: {(analysis.confidence * 100).toFixed(0)}%
+              </p>
+            )}
+
+            {analysis.explanation_tr && (
+              <p className="text-sm text-slate-300 leading-relaxed">
+                {analysis.explanation_tr}
+              </p>
+            )}
+          </div>
+
+          {/* Key Observation */}
+          <div className="glass-card p-6">
+            <div className="flex items-center gap-2 mb-3">
+              <Eye size={16} className="text-indigo-400" />
+              <h2 className="text-base font-display font-semibold text-white">
+                En Önemli Gözlem
+              </h2>
+            </div>
+
+            {analysis.key_observation ? (
+              <p className="text-sm text-slate-300 leading-relaxed">
+                {analysis.key_observation}
+              </p>
+            ) : (
+              <p className="text-sm text-slate-500 italic">
+                Gözlem bilgisi mevcut değil
+              </p>
+            )}
           </div>
         </motion.div>
       )}

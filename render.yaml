@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: notaiz-api
+    env: python
+    region: frankfurt
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app.main:app -w 2 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 120
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: notaiz-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ALGORITHM
+        value: HS256
+      - key: UPLOAD_DIR
+        value: /tmp/notaiz/uploads
+      - key: CORS_ORIGINS
+        value: https://notaiz.vercel.app  # Vercel URL'inizi buraya girin
+      - key: GOOGLE_CLIENT_ID
+        sync: false   # Render dashboard'dan el ile girilecek
+      - key: GEMINI_API_KEY
+        sync: false   # Render dashboard'dan el ile girilecek
+
+databases:
+  - name: notaiz-db
+    databaseName: notaiz
+    user: notaiz
+    region: frankfurt
+    plan: free

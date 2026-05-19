@@ -18,20 +18,22 @@ interface MetricChartProps {
 }
 
 const METRIC_LABELS: Record<string, string> = {
-  cosine_similarity: 'Cosine',
-  dtw_distance_normalized: 'DTW',
-  correlation: 'Korelasyon',
-  fused_score: 'Fused',
+  melodic_similarity:   'Melodik',
+  harmonic_similarity:  'Harmonik',
+  rhythmic_similarity:  'Ritmik',
+  structural_similarity:'Yapısal',
 };
 
 const COLORS = ['#818cf8', '#a78bfa', '#c084fc', '#6366f1'];
 
 export default function MetricChart({ metrics }: MetricChartProps) {
-  const data = Object.entries(metrics).map(([key, value], i) => ({
-    name: METRIC_LABELS[key] || key,
-    value: Number((value * 100).toFixed(1)),
-    color: COLORS[i % COLORS.length],
-  }));
+  const data = (Object.entries(metrics) as [string, number][])
+    .filter(([key]) => key !== 'fused_score')
+    .map(([key, value], i) => ({
+      name: METRIC_LABELS[key] || key,
+      value: Number((value * 100).toFixed(1)),
+      color: COLORS[i % COLORS.length],
+    }));
 
   return (
     <div className="w-full h-64">

@@ -84,10 +84,16 @@ async def run_analysis_local(analysis_id: str, path_a: str, path_b: str) -> None
         analysis.risk_level = result.risk_level
         analysis.uncertainty = result.uncertainty
         analysis.metrics_json = {
-            "cosine_similarity": result.cosine_similarity,
-            "dtw_distance_normalized": result.dtw_distance_normalized,
-            "correlation": result.correlation,
+            "melodic_similarity": result.melodic_similarity,
+            "rhythmic_similarity": result.rhythmic_similarity,
+            "harmonic_similarity": result.harmonic_similarity,
+            "structural_similarity": result.structural_similarity,
             "fused_score": result.fused_score,
+            "category": result.category,
+            "category_label_tr": result.category_label_tr,
+            "confidence": result.confidence,
+            "explanation_tr": result.explanation_tr,
+            "key_observation": result.key_observation,
         }
         analysis.alignment_json = result.alignment_path
         analysis.processing_ms = elapsed_ms

@@ -34,9 +34,10 @@ class UserOut(BaseModel):
 # ── Analysis ──────────────────────────────────────────────────────────
 
 class MetricsOut(BaseModel):
-    cosine_similarity: float
-    dtw_distance_normalized: float
-    correlation: float
+    melodic_similarity: float       # S_m  Szymkiewicz-Simpson
+    rhythmic_similarity: float      # S_r  DTW
+    harmonic_similarity: float      # S_h  Cosine HPCP
+    structural_similarity: float    # S_y  Cosine MFCC+Mel
     fused_score: float
 
 
@@ -56,6 +57,12 @@ class AnalysisOut(BaseModel):
     processing_ms: Optional[int] = None
     error_message: Optional[str] = None
     disclaimer: str = "Bu rapor yalnızca teknik benzerlik sinyali içermektedir; telif hukuku kararı niteliği taşımaz."
+    # LLM interpretation fields
+    category: str = "moderate_similarity"
+    category_label_tr: str = ""
+    confidence: float = 0.0
+    explanation_tr: str = ""
+    key_observation: str = ""
 
     model_config = {"from_attributes": True}
 

@@ -136,9 +136,10 @@ def download_pdf(
         fused_score=analysis.fused_score or 0.0,
         risk_level=analysis.risk_level or "low",
         uncertainty=analysis.uncertainty or 0.0,
-        cosine_sim=metrics.get("cosine_similarity", 0.0),
-        dtw_norm=metrics.get("dtw_distance_normalized", 0.0),
-        correlation=metrics.get("correlation", 0.0),
+        cosine_sim=metrics.get("structural_similarity", 0.0),
+        dtw_norm=metrics.get("rhythmic_similarity", 0.0),
+        correlation=metrics.get("melodic_similarity", 0.0),
+        harmonic_sim=metrics.get("harmonic_similarity", 0.0),
         duration_a=analysis.duration_a or 0.0,
         duration_b=analysis.duration_b or 0.0,
         processing_ms=analysis.processing_ms or 0,
@@ -194,8 +195,21 @@ async def analysis_progress(analysis_id: str, db: Session = Depends(get_db)):
 
 def _to_analysis_out(analysis: Analysis) -> AnalysisOut:
     metrics = None
+    llm_fields: dict = {}
     if analysis.metrics_json:
-        metrics = MetricsOut(**analysis.metrics_json)
+        _metric_keys = {
+            "melodic_similarity", "rhythmic_similarity",
+            "harmonic_similarity", "structural_similarity", "fused_score",
+        }
+        _llm_keys = {
+            "category", "category_label_tr", "confidence",
+            "explanation_tr", "key_observation",
+        }
+        metrics_data = {k: v for k, v in analysis.metrics_json.items() if k in _metric_keys}
+        if metrics_data:
+            metrics = MetricsOut(**metrics_data)
+        llm_fields = {k: v for k, v in analysis.metrics_json.items() if k in _llm_keys}
+
     return AnalysisOut(
         id=analysis.id,
         status=analysis.status,
@@ -211,4 +225,5 @@ def _to_analysis_out(analysis: Analysis) -> AnalysisOut:
         alignment_map=analysis.alignment_json,
         processing_ms=analysis.processing_ms,
         error_message=analysis.error_message,
+        **llm_fields,
     )

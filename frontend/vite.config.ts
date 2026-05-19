@@ -15,6 +15,7 @@ export default defineConfig({
       // Allow Google OAuth popup to post back to this window
       'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
     },
+    // Dev proxy — üretimde VITE_API_URL kullanılır, bu blok build'e dahil edilmez
     proxy: {
       '/api': {
         target: 'http://localhost:8000',

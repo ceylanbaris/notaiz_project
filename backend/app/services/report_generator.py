@@ -61,6 +61,7 @@ def generate_report_pdf(
     duration_b: float,
     processing_ms: int,
     created_at: Optional[datetime] = None,
+    harmonic_sim: float = 0.0,
 ) -> bytes:
     """Generate a PDF report and return raw bytes."""
 
@@ -167,9 +168,10 @@ def generate_report_pdf(
     elements.append(Paragraph("Metrik Detayları", heading_style))
     metric_data = [
         ["Metrik", "Skor", "Ağırlık"],
-        ["Cosine Similarity (MFCC + Mel)", f"{cosine_sim:.4f}", "0.40"],
-        ["Beat-Synchronous DTW (Chroma)", f"{dtw_norm:.4f}", "0.40"],
-        ["Pearson Korelasyonu (Tempogram)", f"{correlation:.4f}", "0.20"],
+        ["Melodik Benzerlik / S_m (Szymkiewicz-Simpson)", f"{correlation:.4f}", "0.40"],
+        ["Ritmik Benzerlik / S_r (DTW Tempogram)", f"{dtw_norm:.4f}", "0.25"],
+        ["Armonik Benzerlik / S_h (Cosine HPCP)", f"{harmonic_sim:.4f}", "0.15"],
+        ["Yapısal Benzerlik / S_y (Cosine MFCC+Mel)", f"{cosine_sim:.4f}", "0.20"],
         ["Fused Score", f"{fused_score:.4f}", "—"],
     ]
     mt = Table(metric_data, colWidths=[8 * cm, 4 * cm, 4 * cm])

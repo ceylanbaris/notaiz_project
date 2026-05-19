@@ -3,8 +3,10 @@
 import axios from 'axios';
 import type { Analysis, AnalysisCreateResponse, AnalysisList, TokenResponse, User } from '../types';
 
+const BASE_URL = import.meta.env.VITE_API_URL ?? '';
+
 const api = axios.create({
-  baseURL: '/api/v1',
+  baseURL: `${BASE_URL}/api/v1`,
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -86,7 +88,7 @@ export async function getHistory(skip = 0, limit = 20): Promise<AnalysisList> {
 
 export function getAnalysisPdfUrl(id: string): string {
   const token = getStoredToken();
-  return `/api/v1/analysis/analyze/${id}/pdf?token=${token}`;
+  return `${BASE_URL}/api/v1/analysis/analyze/${id}/pdf?token=${token}`;
 }
 
 /* ── SSE helper ── */
@@ -97,7 +99,7 @@ export function subscribeToProgress(
   onDone: () => void,
   onError: (err: any) => void,
 ): () => void {
-  const url = `/api/v1/analysis/analyze/${analysisId}/progress`;
+  const url = `${BASE_URL}/api/v1/analysis/analyze/${analysisId}/progress`;
   const eventSource = new EventSource(url);
 
   eventSource.addEventListener('progress', (e: MessageEvent) => {

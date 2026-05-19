@@ -15,9 +15,10 @@ export interface TokenResponse {
 }
 
 export interface Metrics {
-  cosine_similarity: number;
-  dtw_distance_normalized: number;
-  correlation: number;
+  melodic_similarity: number;
+  harmonic_similarity: number;
+  rhythmic_similarity: number;
+  structural_similarity: number;
   fused_score: number;
 }
 
@@ -37,6 +38,12 @@ export interface Analysis {
   processing_ms: number | null;
   error_message: string | null;
   disclaimer: string;
+  // LLM interpretation fields
+  category: string;
+  category_label_tr: string;
+  confidence: number;
+  explanation_tr: string;
+  key_observation: string;
 }
 
 export interface AnalysisCreateResponse {
@@ -68,6 +75,22 @@ export const RISK_LABELS: Record<RiskLevel, string> = {
   low: 'Düşük Risk',
   medium: 'Orta Risk',
   high: 'Yüksek Risk',
+};
+
+export type CategoryType = 'low_similarity' | 'moderate_similarity' | 'high_similarity' | 'cover_or_same';
+
+export const CATEGORY_COLORS: Record<CategoryType, string> = {
+  low_similarity:      '#22c55e',
+  moderate_similarity: '#f59e0b',
+  high_similarity:     '#f97316',
+  cover_or_same:       '#ef4444',
+};
+
+export const CATEGORY_LABELS: Record<CategoryType, string> = {
+  low_similarity:      'Düşük Benzerlik',
+  moderate_similarity: 'Orta Benzerlik',
+  high_similarity:     'Yüksek Benzerlik',
+  cover_or_same:       'Cover veya Birebir Alıntı',
 };
 
 export const STEP_LABELS: Record<string, string> = {
