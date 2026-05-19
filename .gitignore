@@ -49,3 +49,9 @@ desktop.ini
 
 # ── Claude Code ──
 CLAUDE.md
+
+# ── Local debug / test scripts ──
+backend/debug_api.py
+backend/run_analysis.py
+backend/test_*.py
+benchmark/
