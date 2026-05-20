@@ -43,12 +43,17 @@ def load_and_preprocess(path: str) -> ProcessedAudio:
     # 1. Load → mono, target SR
     y, sr = librosa.load(path, sr=settings.SAMPLE_RATE, mono=True)
 
-    # 2. Peak normalisation
+    # 2. Truncate to max duration before heavy processing
+    max_samples = int(settings.MAX_ANALYSIS_DURATION * sr)
+    if len(y) > max_samples:
+        y = y[:max_samples]
+
+    # 3. Peak normalisation
     peak = np.max(np.abs(y))
     if peak > 0:
         y = y / peak
 
-    # 3. Silence trimming
+    # 4. Silence trimming
     y_trimmed, _ = librosa.effects.trim(y, top_db=settings.TOP_DB)
 
     duration = float(len(y_trimmed) / sr)

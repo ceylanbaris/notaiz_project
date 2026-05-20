@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     HOP_LENGTH: int = 512
     N_MFCC: int = 13
     TOP_DB: int = 20
+    MAX_ANALYSIS_DURATION: int = 90  # seconds — cap to speed up cloud processing
 
     # ── Similarity weights (Weighted Multi-dimensional Similarity) ────
     # S_total = W_m*S_m + W_r*S_r + W_h*S_h + W_y*S_y
