@@ -99,6 +99,39 @@ export function subscribeToProgress(
   onDone: () => void,
   onError: (err: any) => void,
 ): () => void {
+  let cancelled = false;
+
+  // Polling fallback: used when SSE disconnects unexpectedly
+  const startPolling = () => {
+    const syntheticSteps = [
+      { step: 'preprocessing', progress: 20, message: 'Ses dosyaları ön işleniyor...' },
+      { step: 'feature_extraction', progress: 50, message: 'Özellikler çıkarılıyor...' },
+      { step: 'comparison', progress: 80, message: 'Benzerlik hesaplanıyor...' },
+    ];
+    let stepIdx = 0;
+    let attempt = 0;
+
+    const poll = async () => {
+      if (cancelled) return;
+      if (attempt % 6 === 0 && stepIdx < syntheticSteps.length) {
+        onProgress({ ...syntheticSteps[stepIdx], analysis_id: analysisId });
+        stepIdx++;
+      }
+      attempt++;
+      if (attempt > 180) { onError('Analiz zaman aşımına uğradı'); return; }
+
+      try {
+        const analysis = await getAnalysis(analysisId);
+        if (analysis.status === 'completed') { onDone(); return; }
+        if (analysis.status === 'failed') { onError(analysis.error_message || 'Analiz başarısız'); return; }
+      } catch { /* keep polling */ }
+
+      setTimeout(poll, 2000);
+    };
+
+    setTimeout(poll, 2000);
+  };
+
   const url = `${BASE_URL}/api/v1/analysis/analyze/${analysisId}/progress`;
   const eventSource = new EventSource(url);
 
@@ -118,10 +151,13 @@ export function subscribeToProgress(
 
   eventSource.onerror = () => {
     eventSource.close();
-    onError('Bağlantı kesildi');
+    if (!cancelled) startPolling();
   };
 
-  return () => eventSource.close();
+  return () => {
+    cancelled = true;
+    eventSource.close();
+  };
 }
 
 export default api;

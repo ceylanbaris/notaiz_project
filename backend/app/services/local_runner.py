@@ -57,21 +57,24 @@ async def run_analysis_local(analysis_id: str, path_a: str, path_b: str) -> None
         if not analysis:
             return
 
-        # ── 1. Pre-processing ──────────────────────────────────────────
+        # ── 1. Pre-processing (parallel) ───────────────────────────────
         await _pub(queue, analysis_id, "preprocessing", 10, "Ses dosyaları ön işleniyor...")
-        audio_a = await loop.run_in_executor(None, load_and_preprocess, path_a)
-        audio_b = await loop.run_in_executor(None, load_and_preprocess, path_b)
+        audio_a, audio_b = await asyncio.gather(
+            loop.run_in_executor(None, load_and_preprocess, path_a),
+            loop.run_in_executor(None, load_and_preprocess, path_b),
+        )
         analysis.duration_a = audio_a.duration
         analysis.duration_b = audio_b.duration
         db.commit()
         await _pub(queue, analysis_id, "preprocessing", 25, "Ön işleme tamamlandı")
 
-        # ── 2. Feature extraction ──────────────────────────────────────
+        # ── 2. Feature extraction (parallel) ───────────────────────────
         await _pub(queue, analysis_id, "feature_extraction", 30, "Özellikler çıkarılıyor...")
-        features_a = await loop.run_in_executor(None, extract_features, audio_a)
-        await _pub(queue, analysis_id, "feature_extraction", 50, "Dosya A özellikleri çıkarıldı")
-        features_b = await loop.run_in_executor(None, extract_features, audio_b)
-        await _pub(queue, analysis_id, "feature_extraction", 65, "Dosya B özellikleri çıkarıldı")
+        features_a, features_b = await asyncio.gather(
+            loop.run_in_executor(None, extract_features, audio_a),
+            loop.run_in_executor(None, extract_features, audio_b),
+        )
+        await _pub(queue, analysis_id, "feature_extraction", 65, "Özellikler çıkarıldı")
 
         # ── 3. Similarity ──────────────────────────────────────────────
         await _pub(queue, analysis_id, "comparison", 70, "Benzerlik hesaplanıyor...")

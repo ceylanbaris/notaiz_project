@@ -198,7 +198,9 @@ async def analysis_progress(analysis_id: str, db: Session = Depends(get_db)):
             except asyncio.TimeoutError:
                 yield {"event": "heartbeat", "data": ""}
 
-    return EventSourceResponse(event_generator())
+    response = EventSourceResponse(event_generator())
+    response.headers['X-Accel-Buffering'] = 'no'
+    return response
 
 
 # ── Helper ────────────────────────────────────────────────────────────
