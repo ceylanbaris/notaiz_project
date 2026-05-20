@@ -5,8 +5,11 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Music } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useGoogleLogin } from '@react-oauth/google';
 import { loginWithGoogle, getStoredToken } from '../services/api';
+
+const GOOGLE_CLIENT_ID =
+  import.meta.env.VITE_GOOGLE_CLIENT_ID ||
+  '51763171764-ktaa4gequ6nr82h9mknpc1loe01rovs9.apps.googleusercontent.com';
 
 const fadeUp = {
   initial: { opacity: 0, y: 30 },
@@ -37,13 +40,15 @@ export default function AuthPage() {
     }
   }, [navigate]);
 
-  const handleGoogleLogin = useGoogleLogin({
-    flow: 'implicit',
-    ux_mode: 'redirect',
-    redirect_uri: `${window.location.origin}/auth`,
-    onSuccess: () => {},
-    onError: () => toast.error('Google girişi başarısız oldu.'),
-  });
+  const handleGoogleLogin = () => {
+    const params = new URLSearchParams({
+      client_id: GOOGLE_CLIENT_ID,
+      redirect_uri: `${window.location.origin}/auth`,
+      response_type: 'token',
+      scope: 'openid email profile',
+    });
+    window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
+  };
 
   return (
     <motion.div
