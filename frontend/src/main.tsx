@@ -9,9 +9,10 @@ import { Toaster } from 'react-hot-toast';
 import App from './App';
 import './index.css';
 
-const GOOGLE_CLIENT_ID =
+const GOOGLE_CLIENT_ID = (
   import.meta.env.VITE_GOOGLE_CLIENT_ID ||
-  '51763171764-ktaa4gequ6nr82h9mknpc1loe01rovs9.apps.googleusercontent.com';
+  '51763171764-ktaa4gequ6nr82h9mknpc1loe01rovs9.apps.googleusercontent.com'
+).trim();
 
 const queryClient = new QueryClient({
   defaultOptions: {
