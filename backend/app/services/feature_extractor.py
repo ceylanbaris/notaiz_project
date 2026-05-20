@@ -101,27 +101,30 @@ def extract_features(audio: ProcessedAudio) -> AudioFeatures:
     n_fft = settings.N_FFT
     hop = settings.HOP_LENGTH
 
-    # Single STFT shared across all features — avoids redundant transforms
+    # Shared STFT for mel-based features
     D = librosa.stft(y, n_fft=n_fft, hop_length=hop)
     S_mag = np.abs(D)
     S_power = S_mag ** 2
 
-    mel = librosa.feature.melspectrogram(S=S_power, sr=sr, n_fft=n_fft, hop_length=hop, n_mels=64)
+    mel = librosa.feature.melspectrogram(S=S_power, sr=sr, n_fft=n_fft, hop_length=hop, n_mels=128)
     log_mel = librosa.power_to_db(mel, ref=np.max)
 
     mfcc = librosa.feature.mfcc(S=log_mel, n_mfcc=settings.N_MFCC)
 
-    # chroma_stft reuses the magnitude spectrum — much faster than CQT/CENS
-    chroma = librosa.feature.chroma_stft(S=S_mag, sr=sr, n_fft=n_fft, hop_length=hop)
-    chroma = _l2_norm(chroma)
+    # CQT-based chroma — required for accurate cover/melody detection
+    chroma_cqt = librosa.feature.chroma_cqt(y=y, sr=sr, hop_length=hop)
+    chroma_cqt = _l2_norm(chroma_cqt)
+
+    hpcp = librosa.feature.chroma_cens(y=y, sr=sr, hop_length=hop)
+    hpcp = _l2_norm(hpcp)
 
     tempogram = librosa.feature.tempogram(y=y, sr=sr, hop_length=hop)
 
     return AudioFeatures(
         mfcc=mfcc,
         log_mel=log_mel,
-        chroma_cqt=chroma,
-        hpcp=chroma,
+        chroma_cqt=chroma_cqt,
+        hpcp=hpcp,
         tempogram=tempogram,
         segments=[],
         sr=sr,
