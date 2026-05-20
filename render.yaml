@@ -5,7 +5,7 @@ services:
     region: frankfurt
     rootDir: backend
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app.main:app -w 2 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 120
+    startCommand: gunicorn app.main:app -w 1 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 120
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -18,7 +18,7 @@ services:
       - key: UPLOAD_DIR
         value: /tmp/notaiz/uploads
       - key: CORS_ORIGINS
-        value: https://notaiz.vercel.app  # Vercel URL'inizi buraya girin
+        value: https://notaiz-project.vercel.app,https://notaiz.vercel.app
       - key: GOOGLE_CLIENT_ID
         sync: false   # Render dashboard'dan el ile girilecek
       - key: GEMINI_API_KEY

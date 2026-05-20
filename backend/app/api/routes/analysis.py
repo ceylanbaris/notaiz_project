@@ -164,18 +164,28 @@ async def analysis_progress(analysis_id: str, db: Session = Depends(get_db)):
         queue = get_queue(analysis_id_str)
 
         if queue is None:
-            # Task already finished before SSE connected — read DB and report final state
-            row = db.query(Analysis).filter(Analysis.id == analysis_id_str).first()
-            if row and row.status == "completed":
-                yield {"event": "progress", "data": json.dumps({
-                    "analysis_id": analysis_id_str, "step": "done",
-                    "progress": 100, "message": "Analiz tamamlandı!",
-                })}
-            elif row and row.status == "failed":
-                yield {"event": "progress", "data": json.dumps({
-                    "analysis_id": analysis_id_str, "step": "error",
-                    "progress": 0, "message": row.error_message or "Analiz başarısız",
-                })}
+            # Queue missing — poll DB until analysis reaches a terminal state
+            for _ in range(60):
+                row = db.query(Analysis).filter(Analysis.id == analysis_id_str).first()
+                if row and row.status == "completed":
+                    yield {"event": "progress", "data": json.dumps({
+                        "analysis_id": analysis_id_str, "step": "done",
+                        "progress": 100, "message": "Analiz tamamlandı!",
+                    })}
+                    return
+                if row and row.status == "failed":
+                    yield {"event": "progress", "data": json.dumps({
+                        "analysis_id": analysis_id_str, "step": "error",
+                        "progress": 0, "message": row.error_message or "Analiz başarısız",
+                    })}
+                    return
+                yield {"event": "heartbeat", "data": ""}
+                await asyncio.sleep(2)
+            # Timed out waiting
+            yield {"event": "progress", "data": json.dumps({
+                "analysis_id": analysis_id_str, "step": "error",
+                "progress": 0, "message": "Analiz zaman aşımına uğradı",
+            })}
             return
 
         while True:
