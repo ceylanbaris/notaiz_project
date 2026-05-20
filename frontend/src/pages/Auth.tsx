@@ -1,4 +1,4 @@
-/* ── Auth Page — Google OAuth Login ── */
+/* ── Auth Page — Google OAuth Login (redirect flow) ── */
 
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -18,24 +18,31 @@ export default function AuthPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    // Google redirect callback — access_token comes in URL hash
+    const hash = window.location.hash;
+    if (hash) {
+      const params = new URLSearchParams(hash.slice(1));
+      const accessToken = params.get('access_token');
+      if (accessToken) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+        loginWithGoogle(accessToken)
+          .then(() => navigate('/'))
+          .catch(() => toast.error('Giriş başarısız. Lütfen tekrar deneyin.'));
+        return;
+      }
+    }
+
     if (getStoredToken()) {
       navigate('/');
     }
   }, [navigate]);
 
   const handleGoogleLogin = useGoogleLogin({
-    scope: 'openid email profile',
-    onSuccess: async (tokenResponse) => {
-      try {
-        await loginWithGoogle(tokenResponse.access_token);
-        navigate('/');
-      } catch {
-        toast.error('Giriş başarısız. Lütfen tekrar deneyin.');
-      }
-    },
-    onError: () => {
-      toast.error('Google girişi iptal edildi veya başarısız oldu.');
-    },
+    flow: 'implicit',
+    ux_mode: 'redirect',
+    redirect_uri: `${window.location.origin}/auth`,
+    onSuccess: () => {},
+    onError: () => toast.error('Google girişi başarısız oldu.'),
   });
 
   return (
@@ -45,7 +52,6 @@ export default function AuthPage() {
       className="section-container flex items-center justify-center min-h-[80vh]"
     >
       <motion.div variants={fadeUp} className="glass-card p-10 w-full max-w-md text-center">
-        {/* Logo */}
         <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-xl shadow-indigo-500/20">
           <Music size={28} className="text-white" />
         </div>
@@ -57,7 +63,6 @@ export default function AuthPage() {
           Analiz geçmişinize erişmek ve yeni analizler başlatmak için giriş yapın
         </p>
 
-        {/* Google Login Button */}
         <button
           onClick={handleGoogleLogin}
           className="w-full flex items-center justify-center gap-3 px-6 py-3.5 rounded-2xl bg-white text-gray-800 font-semibold text-sm hover:bg-gray-100 transition-all hover:shadow-lg hover:shadow-white/10 active:scale-[0.98]"
