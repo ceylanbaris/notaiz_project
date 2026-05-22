@@ -15,8 +15,26 @@ from app.core.database import Base, engine
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Create DB tables on startup."""
+    """Create DB tables on startup and fail stale analyses from the previous process."""
     Base.metadata.create_all(bind=engine)
+
+    # Any analysis still "processing" from a prior server instance can never complete
+    # (the in-memory queue and background task are gone). Mark them failed immediately
+    # so the frontend stops polling and shows a clear retry message.
+    from app.core.database import SessionLocal
+    from app.models.analysis import Analysis as AnalysisModel
+
+    db = SessionLocal()
+    try:
+        stale = db.query(AnalysisModel).filter(AnalysisModel.status == "processing").all()
+        for a in stale:
+            a.status = "failed"
+            a.error_message = "Sunucu yeniden başlatıldı, analiz tamamlanamadı. Lütfen tekrar deneyin."
+        if stale:
+            db.commit()
+    finally:
+        db.close()
+
     yield
 
 

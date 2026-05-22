@@ -133,6 +133,7 @@ export function subscribeToProgress(
   onProgress: (data: any) => void,
   onDone: () => void,
   onError: (err: any) => void,
+  onWaking?: (msg: string) => void,
 ): () => void {
   let cancelled = false;
 
@@ -145,6 +146,7 @@ export function subscribeToProgress(
     ];
     let stepIdx = 0;
     let attempt = 0;
+    let consecutiveErrors = 0;
 
     const poll = async () => {
       if (cancelled) return;
@@ -157,9 +159,20 @@ export function subscribeToProgress(
 
       try {
         const analysis = await getAnalysis(analysisId);
+        consecutiveErrors = 0;
         if (analysis.status === 'completed') { onDone(); return; }
         if (analysis.status === 'failed') { onError(analysis.error_message || 'Analiz başarısız'); return; }
-      } catch { /* keep polling */ }
+      } catch {
+        consecutiveErrors++;
+        if (consecutiveErrors >= 3) {
+          // Server appears to be down — wait for it to come back up
+          onWaking?.('Sunucu yeniden başlatılıyor, lütfen bekleyin...');
+          await _waitForServer(90_000);
+          if (cancelled) return;
+          onWaking?.('');
+          consecutiveErrors = 0;
+        }
+      }
 
       setTimeout(poll, 2000);
     };
@@ -186,7 +199,14 @@ export function subscribeToProgress(
 
   eventSource.onerror = () => {
     eventSource.close();
-    if (!cancelled) startPolling();
+    if (!cancelled) {
+      onWaking?.('Bağlantı kesildi, sunucu kontrol ediliyor...');
+      _waitForServer(90_000).then(() => {
+        if (cancelled) return;
+        onWaking?.('');
+        startPolling();
+      });
+    }
   };
 
   return () => {

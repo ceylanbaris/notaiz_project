@@ -27,6 +27,7 @@ export default function AnalysisPage() {
   const navigate = useNavigate();
   const [progress, setProgress] = useState<ProgressEvent | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [wakingMsg, setWakingMsg] = useState<string>('');
   const unsubRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -55,6 +56,7 @@ export default function AnalysisPage() {
           (errMsg) => {
             setError(typeof errMsg === 'string' ? errMsg : 'Analiz sırasında hata oluştu');
           },
+          (msg) => setWakingMsg(msg),
         );
         unsubRef.current = unsub;
       })
@@ -89,6 +91,14 @@ export default function AnalysisPage() {
         <p className="text-sm text-slate-400 mb-8">
           {progress?.message || 'Dosyalar işleniyor, lütfen bekleyin...'}
         </p>
+
+        {/* Server waking banner */}
+        {wakingMsg && !error && (
+          <div className="mb-6 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center gap-2 justify-center">
+            <Loader2 size={14} className="text-amber-400 animate-spin flex-shrink-0" />
+            <p className="text-xs text-amber-300">{wakingMsg}</p>
+          </div>
+        )}
 
         {/* Error state */}
         {error && (
