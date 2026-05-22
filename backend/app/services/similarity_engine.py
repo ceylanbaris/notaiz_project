@@ -51,14 +51,9 @@ class SimilarityResult:
 
 def _melodic_dtw_similarity(chroma_a, chroma_b) -> float:
     best_score = 0.0
-    # Cap at 500 frames for speed on constrained hardware
-    _MAX = 500
-    if chroma_a.shape[1] > _MAX:
-        step = max(1, chroma_a.shape[1] // _MAX)
-        chroma_a = chroma_a[:, ::step]
-    if chroma_b.shape[1] > _MAX:
-        step = max(1, chroma_b.shape[1] // _MAX)
-        chroma_b = chroma_b[:, ::step]
+    # İşlem çok uzamasın diye gerekirse matrisleri seyrelt (downsample)
+    if chroma_a.shape[1] > 1000: chroma_a = chroma_a[:, ::2]
+    if chroma_b.shape[1] > 1000: chroma_b = chroma_b[:, ::2]
 
     for shift in range(12):
         chroma_b_shifted = np.roll(chroma_b, shift, axis=0)
