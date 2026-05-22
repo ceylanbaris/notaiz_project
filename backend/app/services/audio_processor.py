@@ -51,6 +51,11 @@ def load_and_preprocess(path: str) -> ProcessedAudio:
     # 3. Silence trimming
     y_trimmed, _ = librosa.effects.trim(y, top_db=settings.TOP_DB)
 
+    # 4. Duration cap — keeps production fast on limited CPU
+    max_samples = int(settings.MAX_ANALYSIS_DURATION * sr)
+    if len(y_trimmed) > max_samples:
+        y_trimmed = y_trimmed[:max_samples]
+
     duration = float(len(y_trimmed) / sr)
 
     return ProcessedAudio(signal=y_trimmed, sr=sr, duration=duration)

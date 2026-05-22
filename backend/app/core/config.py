@@ -44,9 +44,10 @@ class Settings(BaseSettings):
     # ── Audio processing ──────────────────────────────────────────────
     SAMPLE_RATE: int = 22050
     N_FFT: int = 2048
-    HOP_LENGTH: int = 512
+    HOP_LENGTH: int = 1024
     N_MFCC: int = 13
     TOP_DB: int = 20
+    MAX_ANALYSIS_DURATION: float = 90.0  # seconds — cap per file before feature extraction
 
     # ── Similarity weights (Weighted Multi-dimensional Similarity) ────
     # S_total = W_m*S_m + W_r*S_r + W_h*S_h + W_y*S_y

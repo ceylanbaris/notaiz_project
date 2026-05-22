@@ -68,12 +68,35 @@ async def run_analysis_local(analysis_id: str, path_a: str, path_b: str) -> None
         db.commit()
         await _pub(queue, analysis_id, "preprocessing", 25, "Ön işleme tamamlandı")
 
-        # ── 2. Feature extraction (parallel) ───────────────────────────
+        # ── 2. Feature extraction (with cache) ────────────────────────────
         await _pub(queue, analysis_id, "feature_extraction", 30, "Özellikler çıkarılıyor...")
+
+        from app.models.analysis import FeatureCache
+        from app.services.feature_extractor import AudioFeatures
+
+        cache_a = db.query(FeatureCache).filter(FeatureCache.file_hash == analysis.file_a_hash).first()
+        cache_b = db.query(FeatureCache).filter(FeatureCache.file_hash == analysis.file_b_hash).first()
+
+        async def _get_or_extract(audio, cache_entry):
+            if cache_entry:
+                return AudioFeatures.from_serialisable(cache_entry.features_json)
+            return await loop.run_in_executor(None, extract_features, audio)
+
         features_a, features_b = await asyncio.gather(
-            loop.run_in_executor(None, extract_features, audio_a),
-            loop.run_in_executor(None, extract_features, audio_b),
+            _get_or_extract(audio_a, cache_a),
+            _get_or_extract(audio_b, cache_b),
         )
+
+        new_cache = []
+        if not cache_a:
+            new_cache.append(FeatureCache(file_hash=analysis.file_a_hash, features_json=features_a.to_serialisable()))
+        if not cache_b:
+            new_cache.append(FeatureCache(file_hash=analysis.file_b_hash, features_json=features_b.to_serialisable()))
+        if new_cache:
+            for entry in new_cache:
+                db.add(entry)
+            db.commit()
+
         await _pub(queue, analysis_id, "feature_extraction", 65, "Özellikler çıkarıldı")
 
         # ── 3. Similarity ──────────────────────────────────────────────
