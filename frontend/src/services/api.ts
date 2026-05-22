@@ -74,6 +74,41 @@ export async function createAnalysis(fileA: File, fileB: File): Promise<Analysis
   return data;
 }
 
+async function _waitForServer(maxMs = 90_000): Promise<void> {
+  const deadline = Date.now() + maxMs;
+  while (Date.now() < deadline) {
+    try {
+      await axios.get(`${BASE_URL}/api/v1/health`, { timeout: 8000 });
+      return;
+    } catch {
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+  }
+}
+
+export async function createAnalysisWithWakeup(
+  fileA: File,
+  fileB: File,
+  onWaking: (msg: string) => void,
+): Promise<AnalysisCreateResponse> {
+  try {
+    return await createAnalysis(fileA, fileB);
+  } catch (err: any) {
+    const isNetworkDrop =
+      !err?.response &&
+      (err?.message === 'Request aborted' ||
+        err?.message === 'Network Error' ||
+        err?.code === 'ERR_NETWORK' ||
+        err?.code === 'ERR_CANCELED');
+    if (!isNetworkDrop) throw err;
+
+    onWaking('Sunucu başlatılıyor, lütfen bekleyin...');
+    await _waitForServer();
+    onWaking('Sunucu hazır, yükleniyor...');
+    return await createAnalysis(fileA, fileB);
+  }
+}
+
 export async function getAnalysis(id: string): Promise<Analysis> {
   const { data } = await api.get<Analysis>(`/analysis/analyze/${id}`);
   return data;

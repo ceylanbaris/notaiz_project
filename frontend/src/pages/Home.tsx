@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 import { ArrowRight, AudioWaveform, Shield, Zap, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
 import UploadZone from '../components/UploadZone';
-import { createAnalysis, getStoredToken } from '../services/api';
+import { createAnalysisWithWakeup, getStoredToken } from '../services/api';
 
 const fadeUp = {
   initial: { opacity: 0, y: 30 },
@@ -22,6 +22,7 @@ export default function Home() {
   const [fileA, setFileA] = useState<File | null>(null);
   const [fileB, setFileB] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingMsg, setLoadingMsg] = useState('Yükleniyor...');
   const navigate = useNavigate();
 
   const canAnalyze = fileA !== null && fileB !== null && !loading;
@@ -37,8 +38,9 @@ export default function Home() {
     }
 
     setLoading(true);
+    setLoadingMsg('Yükleniyor...');
     try {
-      const { analysis_id } = await createAnalysis(fileA, fileB);
+      const { analysis_id } = await createAnalysisWithWakeup(fileA, fileB, setLoadingMsg);
       navigate(`/analysis/${analysis_id}`);
     } catch (err: any) {
       const rawDetail = err?.response?.data?.detail;
@@ -57,6 +59,7 @@ export default function Home() {
       console.error('[createAnalysis]', err?.response?.status, err?.message, err?.response?.data);
       toast.error(msg);
       setLoading(false);
+      setLoadingMsg('Yükleniyor...');
     }
   }, [fileA, fileB, navigate]);
 
@@ -166,7 +169,7 @@ export default function Home() {
                     d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
                   />
                 </svg>
-                Yükleniyor...
+                {loadingMsg}
               </>
             ) : (
               <>
