@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     # ── Audio processing ──────────────────────────────────────────────
     SAMPLE_RATE: int = 22050
     N_FFT: int = 2048
-    HOP_LENGTH: int = 1024
+    HOP_LENGTH: int = 512
     N_MFCC: int = 13
     TOP_DB: int = 20
     MAX_ANALYSIS_DURATION: float = 90.0  # seconds — cap per file before feature extraction

@@ -49,7 +49,7 @@ class SimilarityResult:
     melodic_dtw_similarity: float = 0.0
 
 
-_DTW_MAX_FRAMES = 500  # O(n²) — HF Spaces 16 GB RAM, accuracy over speed
+_DTW_MAX_FRAMES = 350  # O(n²) — balanced: speed vs accuracy
 
 
 def _melodic_dtw_similarity(chroma_a, chroma_b) -> float:
