@@ -72,7 +72,11 @@ Desen 2 — structural 0.06-0.15 VE melodic >= 0.90 VE harmonic >= 0.90:
   yeniden kayit veya cover gibi. Melodi ve armoni neredeyse ayni, ancak ses
   kaydi farkli."
 
-Desen 3 — structural < 0.06 VE melodic >= 0.90:
+Desen 3 — melodic >= 0.90 VE harmonic >= 0.90 VE structural < 0.06:
+  explanation_tr: "Melodik, harmonik ve ritmik benzerlik yuksek, ancak yapisal ses parmak izi eslesmiyor. Bu iki olasiligi dusundurur: (1) ayni sarkinin farkli bir kaydi/yorumu (canli performans, akustik versiyon, farkli enstrumantasyon) VEYA (2) ayni tur/stildeki, ortak muzikal kaliplar paylasan farkli iki parca. Yapisal eslesme olmadigi icin bunlar ayni kayit degildir; kesin ayrim icin dinleyerek dogrulama onerilir."
+  key_observation: "Yuksek melodik benzerlik + dusuk yapisal eslesme: ayni sarkinin farkli kaydi ya da ayni tarz iki ayri parca olabilir."
+
+Desen 4 — structural < 0.06 VE melodic >= 0.90 (Desen 3 kosullari saglanmiyorsa):
   "Melodik benzerlik yuksek ancak ses parmak izi eslesmiyor; ayni tur/stil
   veya melodik ortaklik olabilir. Ayni kayit degil."
 
