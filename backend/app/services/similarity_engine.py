@@ -49,7 +49,7 @@ class SimilarityResult:
     melodic_dtw_similarity: float = 0.0
 
 
-_DTW_MAX_FRAMES = 400  # O(n²) — keep small for production CPU
+_DTW_MAX_FRAMES = 500  # O(n²) — HF Spaces 16 GB RAM, accuracy over speed
 
 
 def _melodic_dtw_similarity(chroma_a, chroma_b) -> float:
@@ -185,22 +185,40 @@ def compute_similarity(fa: AudioFeatures, fb: AudioFeatures) -> SimilarityResult
 
     melodic_dtw = round(_melodic_dtw_similarity(fa.chroma_cqt, fb.chroma_cqt), 4)
 
-    # AKILLI KARAR AĞACI (SMART SCORING) - STRICT VERSİYON + İNTİHAL KURALI
+    # ESKI_KARAR_AGACI (v1 - 2026-05-25):
+    # if structural >= 0.10:
+    #     raw_fused = 0.75 + min(0.25, (structural - 0.10) * 1.5)
+    # elif melodic_dtw >= 0.95:
+    #     raw_fused = 0.70 + min(0.25, (melodic_dtw - 0.95) * 5)
+    # elif melodic_dtw >= 0.85 and structural >= 0.04:
+    #     raw_fused = 0.65 + min(0.20, (melodic_dtw - 0.85) * 2)
+    # elif structural >= 0.065:
+    #     raw_fused = 0.45 + min(0.19, (structural - 0.065) * 5)
+    # else:
+    #     raw_fused = 0.10 + (melodic_dtw * 0.15) + (structural * 1.5)
+
+    # ESKI KARAR AGACI v2 (2026-05-25) - melodic_dtw destekli, Kuzu Kuzu/Techno yanlis yuksek cikiyor:
+    # if structural >= 0.10:
+    #     raw_fused = 0.75 + min(0.25, (structural - 0.10) * 1.5)
+    # elif melodic_dtw >= 0.95:
+    #     raw_fused = 0.70 + min(0.25, (melodic_dtw - 0.95) * 5)
+    # elif melodic_dtw >= 0.85 and structural >= 0.04:
+    #     raw_fused = 0.65 + min(0.20, (melodic_dtw - 0.85) * 2)
+    # elif structural >= 0.065:
+    #     raw_fused = 0.45 + min(0.19, (structural - 0.065) * 5)
+    # else:
+    #     raw_fused = 0.10 + (melodic_dtw * 0.15) + (structural * 1.5)
+
+    # KARAR AGACI v3 (2026-05-25) - structural ANA belirleyici
     if structural >= 0.10:
-        # 1. Birebir Aynı / Kesin İntihal / Heavy Sample (Beklenen: %75 - %100)
-        raw_fused = 0.75 + min(0.25, (structural - 0.10) * 1.5)
-    elif melodic_dtw >= 0.95:
-        # 2. Cover Şarkı (Yapısal düşük ama melodi akışı birebir aynı) (Beklenen: %70 - %95)
-        raw_fused = 0.70 + min(0.25, (melodic_dtw - 0.95) * 5)
-    elif melodic_dtw >= 0.85 and structural >= 0.04:
-        # 3. YENİ KURAL: Melodi Hırsızlığı / İntihal (Altyapı farklı ama ana melodi kopyalanmış) (Beklenen: %65 - %85)
-        raw_fused = 0.65 + min(0.20, (melodic_dtw - 0.85) * 2)
-    elif structural >= 0.065:
-        # 4. Yüksek/Orta Benzerlik - Tartışmalı (Beklenen: %45 - %64)
-        raw_fused = 0.45 + min(0.19, (structural - 0.065) * 5)
+        raw_fused = 0.80 + min(0.20, (structural - 0.10) * 2)
+    elif structural >= 0.06:
+        raw_fused = 0.55 + (structural - 0.06) * 6.25  # 0.06-0.10 -> 0.55-0.80
+    elif structural >= 0.04:
+        raw_fused = 0.35 + (structural - 0.04) * 10    # 0.04-0.06 -> 0.35-0.55
     else:
-        # 5. Farklı Şarkılar (Beklenen: %10 - %35)
-        raw_fused = 0.10 + (melodic_dtw * 0.15) + (structural * 1.5)
+        # structural cok dusuk = ayni kayit/cover degil; melodic_dtw sadece kucuk ipucu
+        raw_fused = min(0.35, structural * 4 + melodic_dtw * 0.10)
 
     fused = round(min(1.0, max(0.0, raw_fused)), 4)
 

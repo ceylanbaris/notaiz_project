@@ -23,46 +23,67 @@ def get_client() -> genai.Client:
     return _client
 
 
-PROMPT_TEMPLATE = """Sen bir muzikolog gibi davran.
+# ESKI_PROMPT_KURALLARI (v2 - 2026-05-25):
+# - cover_or_same: structural > 0.15 veya fused > 0.85 veya melodic_dtw >= 0.95
+# - high_similarity: structural 0.08-0.15 VEYA (melodic_dtw >= 0.85 ve structural >= 0.04)
+# - moderate_similarity: structural 0.065-0.10 veya melodic_dtw 0.85-0.95
+# - low_similarity: structural < 0.065
+# - Kural 5: melodic_dtw >= 0.85 VE structural >= 0.04 => melodi hirsizligi
+
+PROMPT_TEMPLATE = """Sen bir muzik analizi uzmanisin.
 Iki sarki arasindaki teknik benzerlik metriklerini yorumla.
 
 Sarki A: {file_a}
 Sarki B: {file_b}
 
 Olculen DSP metrikleri (0.0 - 1.0 arasi):
+- Yapisal benzerlik (audio fingerprint): {structural:.3f}   <-- EN ONEMLI
 - Melodik benzerlik (chroma analizi): {melodic:.3f}
-- Zaman-uyumlu melodik benzerlik (chroma DTW): {melodic_dtw:.3f}
 - Harmonik benzerlik (HPCP akor analizi): {harmonic:.3f}
 - Ritmik benzerlik (tempogram): {rhythmic:.3f}
-- Yapisal benzerlik (audio fingerprint): {structural:.3f}
+- Zaman-uyumlu melodik benzerlik (chroma DTW): {melodic_dtw:.3f}
 - Birlesik skor: {fused:.3f}
 
-YORUMLAMA KURALLARI:
-1. Structural (fingerprint) en bilgilendirici metrik:
-   - > 0.15 = ciddi yapisal eslesme (cover/sample/birebir)
-   - 0.065 - 0.15 = belirgin yapisal benzerlik (tartismali)
-   - < 0.065 = ortak yapisal eleman yok
+=== TEMEL KURAL ===
+Kategori karari YALNIZCA structural (audio fingerprint) skoruna gore verilir.
+melodic/harmonic/rhythmic/melodic_dtw degerleri kategori KARARINI etkilemez;
+bu metrikler sadece aciklama metninde kullanilabilir.
 
-2. Melodic/harmonic/rhythmic 0.95+ TEK BASINA ayirt edici degildir,
-   cunku Bati pop muziginin %90'i bu aralikta cikar (ortak akor yapisi,
-   ortak ritimler).
+Neden? Pop, elektronik ve genel Bati muziginde melodic/harmonic degerleri
+neredeyse her ciftte 0.85-0.98 araliginda cikar (ortak akor, ortak ritim).
+Bu metrikler ayirt edici degildir. Audio fingerprint (structural) ise
+ses dalgasinin gercek yapisal eslesmesini olcer.
 
-3. Eger melodic_dtw >= 0.95 VE structural >= 0.10 ise yuksek benzerlik vardir.
+=== KATEGORI KURALLARI (STRUCTURAL'A GORE) ===
+- "cover_or_same"      : structural >= 0.10
+- "high_similarity"    : structural 0.06 - 0.10 (dahil degil)
+- "moderate_similarity": structural 0.04 - 0.06 (dahil degil)
+- "low_similarity"     : structural < 0.04
 
-4. Sadece melodic/harmonic yuksek ama structural < 0.065 ise, bu sadece
-   "ayni tur muzik" demektir, benzerlik degildir.
+=== ACIKLAYICI YORUM KURALLARI ===
+Asagidaki desen eslesmelerine gore explanation_tr veya key_observation'a
+OLASILIKSALVE TEMKINLI bir yorum ekle. Kesin iddia ETME.
 
-KATEGORI SECIMI:
-- "cover_or_same": Cover, sample veya birebir alinti
-  (structural > 0.15 veya fused > 0.85 veya melodic_dtw >= 0.95)
-- "high_similarity": Yuksek benzerlik, tartismali olabilir
-  (structural 0.10-0.15 ve fused 0.55-0.85)
-- "moderate_similarity": Orta benzerlik, ortak unsurlar var
-  (structural 0.065-0.10 veya melodic_dtw 0.85-0.95)
-- "low_similarity": Farkli sarkilar, sadece tur benzerligi olabilir
-  (structural < 0.065)
+Desen 1 — structural >= 0.15:
+  "Bu iki kayit birebir ayni veya cok yakin olabilir (ayni master / dijital kopya)."
 
-SADECE su JSON formatinda cevap ver, markdown veya ek aciklama YOK:
+Desen 2 — structural 0.06-0.15 VE melodic >= 0.90 VE harmonic >= 0.90:
+  "Bu iki parca ayni sarkinin farkli bir kaydi olabilir — canli/konser versiyonu,
+  yeniden kayit veya cover gibi. Melodi ve armoni neredeyse ayni, ancak ses
+  kaydi farkli."
+
+Desen 3 — structural < 0.06 VE melodic >= 0.90:
+  "Melodik benzerlik yuksek ancak ses parmak izi eslesmiyor; ayni tur/stil
+  veya melodik ortaklik olabilir. Ayni kayit degil."
+
+Hicbir desen eslesmiyorsa yorum ekleme.
+
+=== GENEL KURALLAR ===
+- "kesinlikle", "kanit", "intihal" gibi mutlak ifadeler KULLANMA
+- "olabilir", "muhtemelen", "isaret ediyor", "benziyor" gibi olasiliksal dil kullan
+- JSON formatini bozma, markdown veya ek metin EKLEME
+
+SADECE su JSON formatinda cevap ver:
 {{
   "category": "low_similarity",
   "category_label_tr": "Dusuk benzerlik",
