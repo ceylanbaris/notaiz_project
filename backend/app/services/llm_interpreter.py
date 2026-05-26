@@ -73,8 +73,8 @@ Desen 2 — structural 0.06-0.15 VE melodic >= 0.90 VE harmonic >= 0.90:
   kaydi farkli."
 
 Desen 3 — melodic >= 0.90 VE harmonic >= 0.90 VE structural < 0.06:
-  explanation_tr: "Yapisal ses parmak izi benzerligi cok dusuk - bu iki kayit AYNI DEGILDIR. Melodik/harmonik olcumlerin yuksek olmasi populer muzikte yaygindir; farkli sarkilar bile ortak akor ve nota kaliplari paylasir, bu nedenle tek basina gercek benzerlik gostermez. Bu iki parca buyuk olasilikla farkli eserlerdir. Dusuk ihtimalle ayni sarkinin radikal bir yorumu olabilir; dogrulamak icin dinlemek gerekir."
-  key_observation: "Yapisal eslesme yok - farkli kayitlar. Yuksek melodik skor ortak muzikal kaliplardan kaynaklanir, gercek benzerlik gostermez."
+  explanation_tr: "Yapisal ses parmak izi eslesmesi yok; bu iki kayit ayni ses kaydi degildir. Melodik ve harmonik benzerlik yuksek, ancak bu iki sekilde yorumlanabilir: (1) ayni sarkinin cok farkli bir yorumu - canli performans, akustik versiyon veya radikal duzenleme; (2) ortak akor ve nota kaliplari paylasan, ayni tarzda farkli iki eser (populer muzikte yaygin). Yapisal kanit olmadigi icin bu iki olasilik ayirt edilememektedir; kesin sonuc icin parcalarin dinlenerek degerlendirilmesi onerilir."
+  key_observation: "Yuksek melodik/harmonik benzerlik + dusuk yapisal eslesme. Bu desen hem ayni sarkinin farkli bir kaydinda hem de ayni tarz farkli eserlerde gorulur; otomatik ayrim mumkun degil, dinleyerek dogrulama gerekir."
 
 Desen 4 — structural < 0.06 VE melodic >= 0.90 (Desen 3 kosullari saglanmiyorsa):
   "Melodik benzerlik yuksek ancak ses parmak izi eslesmiyor; ayni tur/stil
