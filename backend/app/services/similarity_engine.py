@@ -49,7 +49,7 @@ class SimilarityResult:
     melodic_dtw_similarity: float = 0.0
 
 
-_DTW_MAX_FRAMES = 350  # O(n²) — balanced: speed vs accuracy
+_DTW_MAX_FRAMES = 500  # O(n²) — balanced: speed vs accuracy
 
 
 def _melodic_dtw_similarity(chroma_a, chroma_b) -> float:
