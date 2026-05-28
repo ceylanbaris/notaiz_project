@@ -7,18 +7,32 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.core.config import settings
 
+db_url = settings.DATABASE_URL
+if db_url.startswith("postgresql://"):
+    db_url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+
 connect_args = {}
-if settings.DATABASE_URL.startswith("sqlite"):
+if db_url.startswith("sqlite"):
     connect_args = {"check_same_thread": False}
 
-engine = create_engine(
-    settings.DATABASE_URL,
-    pool_pre_ping=True,
-    echo=False,
-    connect_args=connect_args,
-)
+if db_url.startswith("postgresql"):
+    engine = create_engine(
+        db_url,
+        pool_pre_ping=True,
+        pool_size=5,
+        max_overflow=2,
+        pool_recycle=300,
+        echo=False,
+    )
+else:
+    engine = create_engine(
+        db_url,
+        pool_pre_ping=True,
+        echo=False,
+        connect_args=connect_args,
+    )
 
-if settings.DATABASE_URL.startswith("sqlite"):
+if db_url.startswith("sqlite"):
     @event.listens_for(engine, "connect")
     def _set_sqlite_pragmas(dbapi_conn, _rec):
         cur = dbapi_conn.cursor()

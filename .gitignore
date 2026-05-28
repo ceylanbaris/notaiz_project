@@ -59,3 +59,4 @@ benchmark/
 # ── Dev logs ──
 *_dev.log
 *.dev.log
+*.log

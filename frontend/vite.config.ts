@@ -18,7 +18,7 @@ export default defineConfig({
     // Dev proxy — üretimde VITE_API_URL kullanılır, bu blok build'e dahil edilmez
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: 'http://localhost:8002',
         changeOrigin: true,
       },
     },

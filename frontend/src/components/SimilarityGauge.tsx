@@ -64,6 +64,9 @@ export default function SimilarityGauge({ score, risk, size = 220 }: SimilarityG
           %{percentage}
         </motion.span>
         <span className="text-xs text-surface-400 mt-1 tracking-wider uppercase">benzerlik</span>
+        <span className="text-[9px] text-slate-500 mt-0.5 text-center px-3 leading-tight">
+          Teknik Benzerlik Skoru
+        </span>
       </div>
     </div>
   );

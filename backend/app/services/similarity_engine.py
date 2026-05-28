@@ -30,6 +30,19 @@ _TIME_WINDOW = 15
 _FAN_OUT = 5
 _THRESHOLD_STD = 1.0
 
+# ── Categorization thresholds — tune here ────────────────────────────────────
+THRESH_BIREBIR_STRUCTURAL = 0.90
+THRESH_BIREBIR_MELODIC    = 0.90
+THRESH_COVER_STRUCTURAL   = 0.70
+THRESH_COVER_MELODIC      = 0.75
+THRESH_INTIHAL_MELODIC    = 0.82
+THRESH_INTIHAL_STRUCTURAL = 0.05
+
+# ── Hard limits — cannot be overridden ───────────────────────────────────────
+HARD_LIMIT_FUSED     = 0.35   # below → always "Farklı Eserler"
+COVER_MIN_FUSED      = 0.40   # "Cover/Aranje" requires guard_fused above this
+COVER_MIN_STRUCTURAL = 0.02   # "Cover/Aranje" requires structural above this
+
 
 @dataclass
 class SimilarityResult:
@@ -81,14 +94,16 @@ def _classify_risk(score: float) -> str:
     return "low"
 
 
-def _categorize(fused: float) -> str:
-    if fused >= 0.85:
-        return "cover_or_same"
-    if fused >= 0.60:
-        return "high_similarity"
-    if fused >= 0.30:
-        return "moderate_similarity"
-    return "low_similarity"
+def _categorize(structural: float, melodic_dtw: float, fused: float) -> str:
+    if fused < HARD_LIMIT_FUSED:
+        return "Farklı Eserler / Tesadüfi Benzerlik"
+    if structural > THRESH_BIREBIR_STRUCTURAL and melodic_dtw > THRESH_BIREBIR_MELODIC:
+        return "Birebir Aynı"
+    if fused >= 0.35 and melodic_dtw >= 0.80 and structural > 0.05:
+        return "Cover/Aranje"
+    if fused >= 0.35 and melodic_dtw >= 0.85 and structural <= 0.05:
+        return "İntihal Şüphesi"
+    return "Düşük/Orta Benzerlik"
 
 
 def _cosine_sim(a: np.ndarray, b: np.ndarray) -> float:
@@ -209,18 +224,27 @@ def compute_similarity(fa: AudioFeatures, fb: AudioFeatures) -> SimilarityResult
     # else:
     #     raw_fused = 0.10 + (melodic_dtw * 0.15) + (structural * 1.5)
 
-    # KARAR AGACI v3 (2026-05-25) - structural ANA belirleyici
-    if structural >= 0.10:
-        raw_fused = 0.80 + min(0.20, (structural - 0.10) * 2)
-    elif structural >= 0.06:
-        raw_fused = 0.55 + (structural - 0.06) * 6.25  # 0.06-0.10 -> 0.55-0.80
-    elif structural >= 0.04:
-        raw_fused = 0.35 + (structural - 0.04) * 10    # 0.04-0.06 -> 0.35-0.55
-    else:
-        # structural cok dusuk = ayni kayit/cover degil; melodic_dtw sadece kucuk ipucu
-        raw_fused = min(0.35, structural * 4 + melodic_dtw * 0.10)
+    # KARAR AGACI v6 (2026-05-28) - Melodi Hırsızlığı kuralı eklendi
+    guard_fused = round(
+        0.20 * melodic + 0.15 * harmonic + 0.10 * rhythmic + 0.55 * structural, 4
+    )
 
+    if structural >= 0.10:
+        raw_fused = 0.75 + min(0.25, (structural - 0.10) * 1.5)
+    elif melodic_dtw >= 0.95:
+        raw_fused = 0.70 + min(0.25, (melodic_dtw - 0.95) * 5)
+    elif melodic_dtw >= 0.85 and structural >= 0.04:  # Melodi Hırsızlığı
+        raw_fused = 0.65 + min(0.20, (melodic_dtw - 0.85) * 2)
+    elif structural >= 0.065:
+        raw_fused = 0.45 + min(0.19, (structural - 0.065) * 5)
+    else:
+        raw_fused = 0.10 + (melodic_dtw * 0.15) + (structural * 1.5)
     fused = round(min(1.0, max(0.0, raw_fused)), 4)
+
+    if guard_fused < HARD_LIMIT_FUSED:
+        category = "Farklı Eserler / Tesadüfi Benzerlik"
+    else:
+        category = _categorize(structural, melodic_dtw, fused)
 
     print(
         f"[NOTAIZ] melodic={melodic:.4f}  harmonic={harmonic:.4f}"
@@ -238,26 +262,19 @@ def compute_similarity(fa: AudioFeatures, fb: AudioFeatures) -> SimilarityResult
         risk_level=_classify_risk(fused),
         uncertainty=0.0,
         alignment_path=[],
-        category=_categorize(fused),
+        category=category,
+        category_label_tr=category,
+        confidence=fused,
         melodic_dtw_similarity=melodic_dtw,
     )
 
-    file_a_name = getattr(fa, "filename", "Sarki A")
-    file_b_name = getattr(fb, "filename", "Sarki B")
     interp = interpret_similarity(
-        melodic=melodic,
-        harmonic=harmonic,
-        rhythmic=rhythmic,
         structural=structural,
-        fused=fused,
         melodic_dtw=melodic_dtw,
-        file_a_name=file_a_name,
-        file_b_name=file_b_name,
+        fused=fused,
+        rule_based_category=category,
     )
-    result.category = interp["category"]
-    result.category_label_tr = interp["category_label_tr"]
-    result.confidence = interp["confidence"]
-    result.explanation_tr = interp["explanation_tr"]
-    result.key_observation = interp["key_observation"]
+    result.explanation_tr = interp.get("explanation_tr", "")
+    result.key_observation = category
 
     return result

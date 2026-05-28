@@ -15,6 +15,7 @@ import {
   Shield,
   ShieldAlert,
   Eye,
+  ChevronDown,
 } from 'lucide-react';
 import { getAnalysis, getAnalysisPdfUrl } from '../services/api';
 import type { Analysis, CategoryType } from '../types';
@@ -67,6 +68,7 @@ export default function ResultsPage() {
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [howOpen, setHowOpen] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -111,6 +113,12 @@ export default function ResultsPage() {
   const category   = analysis.category   || 'moderate_similarity';
   const catColor   = CATEGORY_COLORS[category as CategoryType] ?? '#f59e0b';
   const hasLLM     = !!(analysis.explanation_tr || analysis.key_observation);
+
+  const confidencePct = analysis.confidence > 0 ? Math.round(analysis.confidence * 100) : null;
+  const confidenceLabel =
+    analysis.confidence >= 0.8 ? 'Yüksek' : analysis.confidence >= 0.5 ? 'Orta' : 'Düşük';
+  const confidenceColor =
+    analysis.confidence >= 0.8 ? '#22c55e' : analysis.confidence >= 0.5 ? '#f59e0b' : '#ef4444';
 
   return (
     <motion.div
@@ -232,6 +240,43 @@ export default function ResultsPage() {
         </motion.div>
       )}
 
+      {/* How it works — collapsible */}
+      <motion.div variants={fadeUp} className="mb-6">
+        <div className="glass-card overflow-hidden">
+          <button
+            onClick={() => setHowOpen((o) => !o)}
+            className="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-white/5 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <Info size={15} className="text-indigo-400" />
+              <span className="text-sm font-semibold text-white">Bu analiz nasıl yapıldı?</span>
+            </div>
+            <ChevronDown
+              size={15}
+              className="text-slate-400 transition-transform duration-200"
+              style={{ transform: howOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
+            />
+          </button>
+          {howOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="px-5 pb-5 border-t border-white/10"
+            >
+              <p className="text-sm text-slate-300 leading-relaxed pt-4">
+                Notaiz, dört bağımsız sinyali birleştiren hibrit bir mimari kullanır:{' '}
+                <span className="text-indigo-300 font-medium">Chroma</span> (melodik),{' '}
+                <span className="text-purple-300 font-medium">HPCP</span> (harmonik),{' '}
+                <span className="text-violet-300 font-medium">Tempogram</span> (ritmik) ve{' '}
+                <span className="text-indigo-400 font-medium">Audio Fingerprinting</span> (yapısal).
+                Bu metrikler büyük dil modeli (Gemini) ile yorumlanarak kategorik bir sonuca
+                dönüştürülür. Sistem teknik benzerlik sinyali üretir.
+              </p>
+            </motion.div>
+          )}
+        </div>
+      </motion.div>
+
       {/* LLM Interpretation */}
       {hasLLM && (
         <motion.div variants={fadeUp} className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
@@ -253,10 +298,20 @@ export default function ResultsPage() {
               </p>
             )}
 
-            {analysis.confidence > 0 && (
-              <p className="text-xs text-slate-500 mb-3">
-                Güven: {(analysis.confidence * 100).toFixed(0)}%
-              </p>
+            {confidencePct !== null && (
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-xs text-slate-500">Analiz güveni:</span>
+                <span
+                  className="text-xs font-semibold px-2.5 py-0.5 rounded-full"
+                  style={{
+                    color: confidenceColor,
+                    backgroundColor: `${confidenceColor}20`,
+                    border: `1px solid ${confidenceColor}40`,
+                  }}
+                >
+                  {confidenceLabel} — %{confidencePct}
+                </span>
+              </div>
             )}
 
             {analysis.explanation_tr && (
@@ -298,9 +353,12 @@ export default function ResultsPage() {
 
       {/* Disclaimer */}
       <motion.div variants={fadeUp}>
-        <div className="rounded-xl bg-amber-500/5 border border-amber-500/20 p-4 text-center">
-          <p className="text-xs text-amber-300/80 leading-relaxed">
-            ⚠️ {analysis.disclaimer ?? 'Bu sistem yalnızca teknik benzerlik sinyali üretir; telif hukuku kararı niteliği taşımaz.'}
+        <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 p-5 text-center">
+          <p className="text-sm text-amber-300/90 leading-relaxed">
+            ⚠️{' '}
+            Bu araç teknik benzerlik analizi sunar; müzik intihalı konusunda kesin hukuki karar
+            niteliği taşımaz. Sonuçlar uzman değerlendirmesi için bir ön-gösterge olarak
+            kullanılmalıdır.
           </p>
         </div>
       </motion.div>

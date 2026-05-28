@@ -23,120 +23,63 @@ def get_client() -> genai.Client:
     return _client
 
 
-# ESKI_PROMPT_KURALLARI (v2 - 2026-05-25):
-# - cover_or_same: structural > 0.15 veya fused > 0.85 veya melodic_dtw >= 0.95
-# - high_similarity: structural 0.08-0.15 VEYA (melodic_dtw >= 0.85 ve structural >= 0.04)
-# - moderate_similarity: structural 0.065-0.10 veya melodic_dtw 0.85-0.95
-# - low_similarity: structural < 0.065
-# - Kural 5: melodic_dtw >= 0.85 VE structural >= 0.04 => melodi hirsizligi
+PROMPT_TEMPLATE = """Sen uzman bir müzikolog ve telif hakları analizörüsün.
 
-PROMPT_TEMPLATE = """Sen bir muzik analizi uzmanisin.
-Iki sarki arasindaki teknik benzerlik metriklerini yorumla.
+Sana iki şarkı arasındaki benzerlik skorları ve sistemin belirlediği ana kategori verilecek.
+Senin görevin, SADECE bu skorlara dayanarak kısa (1-2 cümle) ve net bir Türkçe değerlendirme yazmaktır.
 
-Sarki A: {file_a}
-Sarki B: {file_b}
+─── GİRDİ SKORLARI ────────────────────────────────────────────────
+  Structural (Yapısal parmak izi): {structural:.3f}
+  Melodic DTW (Melodik uyum):      {melodic_dtw:.3f}
+  Genel Skor (fused_score):        {fused:.3f}
+  Sistem Kategorisi:               {rule_based_category}
 
-Olculen DSP metrikleri (0.0 - 1.0 arasi):
-- Yapisal benzerlik (audio fingerprint): {structural:.3f}   <-- EN ONEMLI
-- Melodik benzerlik (chroma analizi): {melodic:.3f}
-- Harmonik benzerlik (HPCP akor analizi): {harmonic:.3f}
-- Ritmik benzerlik (tempogram): {rhythmic:.3f}
-- Zaman-uyumlu melodik benzerlik (chroma DTW): {melodic_dtw:.3f}
-- Birlesik skor: {fused:.3f}
+─── KURAL 1 (EZİLEMEZ, HER KOŞULDA UYGULA) ────────────────────────
+Eğer Sistem Kategorisi "Farklı Eserler / Tesadüfi Benzerlik" ise VEYA fused_score < 0.35 ise:
+  → KESİNLİKLE intihal, cover veya anlamlı bir bağ ima etme.
+  → Yüksek çıkan melodik veya ritmik skorların tamamen müzikal formülasyon
+    tesadüfü olduğunu, şarkılar arasında hiçbir organik bağ (cover, intihal,
+    alıntı) bulunmadığını net bir dille ifade et.
+  → Örnek: "Eserler arasında müzikal bir bağ bulunmamaktadır; gözlemlenen
+    yüksek melodik/ritmik skorlar müzikal formülasyon tesadüfünden
+    kaynaklanmakta olup herhangi bir cover, intihal veya alıntı ilişkisine
+    işaret etmemektedir."
 
-=== TEMEL KURAL ===
-Kategori karari YALNIZCA structural (audio fingerprint) skoruna gore verilir.
-melodic/harmonic/rhythmic/melodic_dtw degerleri kategori KARARINI etkilemez;
-bu metrikler sadece aciklama metninde kullanilabilir.
+─── KURAL 2 (ÇIKTI FORMATI, EZİLEMEZ) ─────────────────────────────
+  Çıktını SADECE ve SADECE geçerli bir JSON formatında ver.
+  Başka hiçbir metin, markdown veya açıklama ekleme.
 
-Neden? Pop, elektronik ve genel Bati muziginde melodic/harmonic degerleri
-neredeyse her ciftte 0.85-0.98 araliginda cikar (ortak akor, ortak ritim).
-Bu metrikler ayirt edici degildir. Audio fingerprint (structural) ise
-ses dalgasinin gercek yapisal eslesmesini olcer.
-
-=== KATEGORI KURALLARI (STRUCTURAL'A GORE) ===
-- "cover_or_same"      : structural >= 0.10
-- "high_similarity"    : structural 0.06 - 0.10 (dahil degil)
-- "moderate_similarity": structural 0.04 - 0.06 (dahil degil)
-- "low_similarity"     : structural < 0.04
-
-=== ACIKLAYICI YORUM KURALLARI ===
-Asagidaki desen eslesmelerine gore explanation_tr veya key_observation'a
-OLASILIKSALVE TEMKINLI bir yorum ekle. Kesin iddia ETME.
-
-Desen 1 — structural >= 0.15:
-  "Bu iki kayit birebir ayni veya cok yakin olabilir (ayni master / dijital kopya)."
-
-Desen 2 — structural 0.06-0.15 VE melodic >= 0.90 VE harmonic >= 0.90:
-  "Bu iki parca ayni sarkinin farkli bir kaydi olabilir — canli/konser versiyonu,
-  yeniden kayit veya cover gibi. Melodi ve armoni neredeyse ayni, ancak ses
-  kaydi farkli."
-
-Desen 3 — melodic >= 0.90 VE harmonic >= 0.90 VE structural < 0.06:
-  explanation_tr: "Yapisal ses parmak izi eslesmesi yok; bu iki kayit ayni ses kaydi degildir. Melodik ve harmonik benzerlik yuksek, ancak bu iki sekilde yorumlanabilir: (1) ayni sarkinin cok farkli bir yorumu - canli performans, akustik versiyon veya radikal duzenleme; (2) ortak akor ve nota kaliplari paylasan, ayni tarzda farkli iki eser (populer muzikte yaygin). Yapisal kanit olmadigi icin bu iki olasilik ayirt edilememektedir; kesin sonuc icin parcalarin dinlenerek degerlendirilmesi onerilir."
-  key_observation: "Yuksek melodik/harmonik benzerlik + dusuk yapisal eslesme. Bu desen hem ayni sarkinin farkli bir kaydinda hem de ayni tarz farkli eserlerde gorulur; otomatik ayrim mumkun degil, dinleyerek dogrulama gerekir."
-
-Desen 4 — structural < 0.06 VE melodic >= 0.90 (Desen 3 kosullari saglanmiyorsa):
-  "Melodik benzerlik yuksek ancak ses parmak izi eslesmiyor; ayni tur/stil
-  veya melodik ortaklik olabilir. Ayni kayit degil."
-
-Hicbir desen eslesmiyorsa yorum ekleme.
-
-=== GENEL KURALLAR ===
-- "kesinlikle", "kanit", "intihal" gibi mutlak ifadeler KULLANMA
-- "olabilir", "muhtemelen", "isaret ediyor", "benziyor" gibi olasiliksal dil kullan
-- JSON formatini bozma, markdown veya ek metin EKLEME
-
-SADECE su JSON formatinda cevap ver:
-{{
-  "category": "low_similarity",
-  "category_label_tr": "Dusuk benzerlik",
-  "confidence": 0.85,
-  "explanation_tr": "2-3 cumlelik analiz",
-  "key_observation": "En dikkat cekici metrik veya gozlem"
-}}
-"""
+SADECE şu JSON formatında cevap ver:
+{{"explanation_tr": "Senin 1-2 cümlelik profesyonel analizin."}}"""
 
 
-def _fallback_result(reason: str = "AI yorumu yapilamadi") -> dict:
+def _fallback_result(msg: str = "AI yorumu yapilamadi") -> dict:
     return {
-        "category": "moderate_similarity",
-        "category_label_tr": "Yorumlanamadi",
-        "confidence": 0.5,
-        "explanation_tr": f"Otomatik yorum hatasi: {reason}",
-        "key_observation": "DSP skorlarina basvurun",
+        "explanation_tr": f"Otomatik yorum alınamadı: {msg}",
     }
 
 
 def interpret_similarity(
-    melodic: float,
-    harmonic: float,
-    rhythmic: float,
     structural: float,
-    fused: float,
     melodic_dtw: float,
-    file_a_name: str = "Sarki A",
-    file_b_name: str = "Sarki B",
+    fused: float,
+    rule_based_category: str = "",
 ) -> dict:
-    """DSP metriklerini Gemini ile yorumlatip kategori dondurur."""
+    """Gemini'ye benzerlik skorlarını ve algoritma kategorisini gönderir, Türkçe açıklama alır."""
     if not settings.GEMINI_API_KEY:
         logger.warning("GEMINI_API_KEY tanimli degil, fallback donuyor")
         return _fallback_result("API key yok")
 
     prompt = PROMPT_TEMPLATE.format(
-        file_a=file_a_name,
-        file_b=file_b_name,
-        melodic=melodic,
-        melodic_dtw=melodic_dtw,
-        harmonic=harmonic,
-        rhythmic=rhythmic,
         structural=structural,
+        melodic_dtw=melodic_dtw,
         fused=fused,
+        rule_based_category=rule_based_category or "Belirtilmedi",
     )
 
     _MODEL = "gemini-2.5-flash"
     _MAX_RETRIES = 4
-    _RETRY_DELAYS = [1, 2, 4]  # saniye
+    _RETRY_DELAYS = [1, 2, 4]
 
     raw_text = None
     for attempt in range(_MAX_RETRIES):
@@ -146,7 +89,7 @@ def interpret_similarity(
                 model=_MODEL,
                 contents=prompt,
                 config=types.GenerateContentConfig(
-                    temperature=0.2,
+                    temperature=0.1,
                     response_mime_type="application/json",
                 ),
             )
@@ -157,8 +100,10 @@ def interpret_similarity(
             if "503" in err_str or "UNAVAILABLE" in err_str:
                 if attempt < _MAX_RETRIES - 1:
                     delay = _RETRY_DELAYS[min(attempt, len(_RETRY_DELAYS) - 1)]
-                    logger.warning("Gemini 503, %ds beklenip tekrar deneniyor (deneme %d/%d)...",
-                                   delay, attempt + 1, _MAX_RETRIES)
+                    logger.warning(
+                        "Gemini 503, %ds beklenip tekrar deneniyor (deneme %d/%d)...",
+                        delay, attempt + 1, _MAX_RETRIES,
+                    )
                     time.sleep(delay)
                     continue
             logger.error("Gemini cagirisi hatasi: %s", e)
@@ -177,20 +122,12 @@ def interpret_similarity(
 
         data = json.loads(text)
 
-        required = ["category", "category_label_tr", "confidence",
-                    "explanation_tr", "key_observation"]
-        for key in required:
-            if key not in data:
-                logger.warning("LLM cevabinda %s eksik", key)
-                return _fallback_result(f"{key} alani eksik")
+        if "explanation_tr" not in data:
+            logger.warning("LLM cevabinda 'explanation_tr' eksik, raw: %s", raw_text[:200])
+            return _fallback_result("explanation_tr alani eksik")
 
-        valid_categories = ["cover_or_same", "high_similarity",
-                            "moderate_similarity", "low_similarity"]
-        if data["category"] not in valid_categories:
-            data["category"] = "moderate_similarity"
-
-        return data
+        return {"explanation_tr": str(data["explanation_tr"])}
 
     except json.JSONDecodeError as e:
-        logger.error("Gemini JSON parse hatasi: %s", e)
+        logger.error("Gemini JSON parse hatasi: %s | raw: %s", e, raw_text[:200])
         return _fallback_result("JSON parse hatasi")
