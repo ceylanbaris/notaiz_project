@@ -4,7 +4,6 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
-  Download,
   ArrowLeft,
   FileAudio,
   Clock,
@@ -16,13 +15,17 @@ import {
   ShieldAlert,
   Eye,
   ChevronDown,
+  Music,
+  Waves,
+  Activity,
+  Fingerprint,
+  Brain,
 } from 'lucide-react';
-import { getAnalysis, getAnalysisPdfUrl } from '../services/api';
+import { getAnalysis } from '../services/api';
 import type { Analysis, CategoryType } from '../types';
 import { CATEGORY_COLORS, CATEGORY_LABELS } from '../types';
 import SimilarityGauge from '../components/SimilarityGauge';
 import MetricChart from '../components/MetricChart';
-import AlignmentMap from '../components/AlignmentMap';
 
 const fadeUp = {
   initial: { opacity: 0, y: 20 },
@@ -139,7 +142,7 @@ export default function ResultsPage() {
       </motion.div>
 
       {/* Header + Score */}
-      <motion.div variants={fadeUp} className="glass-card p-8 mb-6">
+      <motion.div variants={fadeUp} className="glass-card p-8 mb-4 shadow-2xl shadow-purple-500/10">
         <div className="flex flex-col lg:flex-row items-center gap-8">
           {/* Gauge */}
           <div className="flex-shrink-0">
@@ -211,37 +214,92 @@ export default function ResultsPage() {
                 </span>
               )}
             </div>
-
-            {/* PDF Download */}
-            {id && (
-              <div className="mt-6">
-                <a
-                  href={getAnalysisPdfUrl(id)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn-primary inline-flex items-center gap-2 !text-sm"
-                >
-                  <Download size={16} />
-                  PDF Rapor İndir
-                </a>
-              </div>
-            )}
           </div>
         </div>
       </motion.div>
 
-      {/* Metrics Chart */}
-      {analysis.metrics && (
-        <motion.div variants={fadeUp} className="glass-card p-6 mb-6">
-          <h2 className="text-base font-display font-semibold text-white mb-4">
-            Metrik Detayları
-          </h2>
-          <MetricChart metrics={analysis.metrics} />
+      {/* AI Değerlendirmesi + En Önemli Gözlem */}
+      {hasLLM && (
+        <motion.div variants={fadeUp} className="space-y-4 mb-4">
+
+          {/* AI Assessment — full-width premium card */}
+          <div
+            className="rounded-xl border border-purple-500/20 p-6 shadow-xl shadow-purple-500/10 hover:border-purple-500/30 transition-colors duration-200"
+            style={{
+              background:
+                'linear-gradient(135deg, rgba(88,28,135,0.13) 0%, rgba(55,48,163,0.08) 60%, transparent 100%)',
+            }}
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <Shield size={14} style={{ color: catColor }} />
+              <h2 className="text-xs font-bold tracking-widest text-slate-400 uppercase">
+                AI Değerlendirmesi
+              </h2>
+            </div>
+
+            {analysis.category_label_tr && (
+              <p
+                className="text-2xl font-bold tracking-tight mb-3"
+                style={{ color: catColor }}
+              >
+                {analysis.category_label_tr}
+              </p>
+            )}
+
+            {confidencePct !== null && (
+              <div className="flex items-center gap-2 mb-4">
+                <span className="text-xs text-slate-500">Analiz güveni:</span>
+                <span
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-0.5 rounded-full"
+                  style={{
+                    color: confidenceColor,
+                    backgroundColor: `${confidenceColor}20`,
+                    border: `1px solid ${confidenceColor}40`,
+                  }}
+                >
+                  <span
+                    className="w-1.5 h-1.5 rounded-full shrink-0"
+                    style={{ backgroundColor: confidenceColor }}
+                  />
+                  {confidenceLabel} — %{confidencePct}
+                </span>
+              </div>
+            )}
+
+            {analysis.explanation_tr && (
+              <p className="text-sm text-slate-300 leading-relaxed">
+                {analysis.explanation_tr}
+              </p>
+            )}
+          </div>
+
+          {/* En Önemli Gözlem — sol şerit vurgulu kart */}
+          <div className="relative rounded-xl border border-white/10 bg-white/[0.02] shadow-xl shadow-purple-500/8 overflow-hidden hover:border-white/15 transition-colors duration-200">
+            <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-violet-400 to-indigo-500" />
+            <div className="p-6 pl-7">
+              <div className="flex items-center gap-2 mb-3">
+                <Eye size={14} className="text-violet-400" />
+                <h2 className="text-xs font-bold tracking-widest text-slate-400 uppercase">
+                  En Önemli Gözlem
+                </h2>
+              </div>
+              {analysis.key_observation ? (
+                <p className="text-sm text-slate-300 leading-relaxed">
+                  {analysis.key_observation}
+                </p>
+              ) : (
+                <p className="text-sm text-slate-500 italic">
+                  Gözlem bilgisi mevcut değil
+                </p>
+              )}
+            </div>
+          </div>
+
         </motion.div>
       )}
 
       {/* How it works — collapsible */}
-      <motion.div variants={fadeUp} className="mb-6">
+      <motion.div variants={fadeUp} className="mb-4">
         <div className="glass-card overflow-hidden">
           <button
             onClick={() => setHowOpen((o) => !o)}
@@ -261,95 +319,90 @@ export default function ResultsPage() {
             <motion.div
               initial={{ opacity: 0, y: -6 }}
               animate={{ opacity: 1, y: 0 }}
-              className="px-5 pb-5 border-t border-white/10"
+              className="px-5 pb-6 border-t border-white/10"
             >
-              <p className="text-sm text-slate-300 leading-relaxed pt-4">
-                Notaiz, dört bağımsız sinyali birleştiren hibrit bir mimari kullanır:{' '}
-                <span className="text-indigo-300 font-medium">Chroma</span> (melodik),{' '}
-                <span className="text-purple-300 font-medium">HPCP</span> (harmonik),{' '}
-                <span className="text-violet-300 font-medium">Tempogram</span> (ritmik) ve{' '}
-                <span className="text-indigo-400 font-medium">Audio Fingerprinting</span> (yapısal).
-                Bu metrikler büyük dil modeli (Gemini) ile yorumlanarak kategorik bir sonuca
-                dönüştürülür. Sistem teknik benzerlik sinyali üretir.
+              <p className="text-sm text-slate-400 leading-relaxed pt-5 mb-5">
+                Notaiz, müzikal benzerliği <span className="text-white font-medium">dört bağımsız boyutta</span> eş zamanlı ölçen, ardından bu sinyalleri yapay zeka ile bütünleştiren hibrit bir analiz motorudur. Her boyut, benzerliğin farklı bir müzikal katmanını temsil eder.
               </p>
+
+              {/* 4 signals grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
+                <div className="rounded-lg bg-indigo-500/10 border border-indigo-500/20 p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Music size={14} className="text-indigo-300" />
+                    <span className="text-xs font-bold text-indigo-300 uppercase tracking-wider">Melodik · Chroma</span>
+                  </div>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Nota ve perde dağılımını karşılaştırır. Tonalite değişse dahi aynı melodiyi tespit edebilir; intihalin en sezgisel boyutunu ölçer.
+                  </p>
+                </div>
+
+                <div className="rounded-lg bg-purple-500/10 border border-purple-500/20 p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Waves size={14} className="text-purple-300" />
+                    <span className="text-xs font-bold text-purple-300 uppercase tracking-wider">Harmonik · HPCP</span>
+                  </div>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Akor ilerleyişlerini ve tonal yapıyı ölçer. Farklı enstrümantasyon veya aranjmanda gizlenmiş harmonik ortaklıkları ortaya çıkarır.
+                  </p>
+                </div>
+
+                <div className="rounded-lg bg-violet-500/10 border border-violet-500/20 p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Activity size={14} className="text-violet-300" />
+                    <span className="text-xs font-bold text-violet-300 uppercase tracking-wider">Ritmik · Tempogram</span>
+                  </div>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Tempo ve ritim desenini karşılaştırır. Hız değiştirilmiş ya da yeniden yorumlanmış versiyonlardaki yapısal ritim benzerliğini yakalar.
+                  </p>
+                </div>
+
+                <div className="rounded-lg bg-cyan-500/10 border border-cyan-500/20 p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Fingerprint size={14} className="text-cyan-300" />
+                    <span className="text-xs font-bold text-cyan-300 uppercase tracking-wider">Yapısal · Ses Parmak İzi</span>
+                  </div>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Ham akustik kimliği birebir eşleştirir. Cover veya sample kullanımında yüksek skor üretir; aldatılması en zor boyuttur.
+                  </p>
+                </div>
+              </div>
+
+              {/* Pipeline */}
+              <div className="flex items-center gap-2 mb-4 px-3 py-2.5 rounded-lg bg-white/5 border border-white/10 overflow-x-auto">
+                <span className="text-xs text-slate-500 whitespace-nowrap">Ses Dosyaları</span>
+                <div className="flex-1 h-px bg-gradient-to-r from-slate-600 to-indigo-500/60 min-w-[20px]" />
+                <span className="text-xs font-medium text-indigo-300 whitespace-nowrap">4 Sinyal</span>
+                <div className="flex-1 h-px bg-gradient-to-r from-indigo-500/60 to-violet-500/60 min-w-[20px]" />
+                <Brain size={14} className="text-violet-300 shrink-0" />
+                <div className="flex-1 h-px bg-gradient-to-r from-violet-500/60 to-green-500/40 min-w-[20px]" />
+                <span className="text-xs font-medium text-green-400 whitespace-nowrap">Karar</span>
+              </div>
+
+              {/* AI layer */}
+              <div className="rounded-lg bg-gradient-to-r from-violet-500/10 to-indigo-500/10 border border-violet-500/20 p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Brain size={14} className="text-violet-300" />
+                  <span className="text-xs font-bold text-violet-300 uppercase tracking-wider">Yapay Zeka Yorumu · Gemini</span>
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Dört metriğin birleşik profili Gemini'ye iletilir. Model, sayısal sinyalleri müzikal bir bağlama oturtarak olası nedenleri değerlendirir ve güven skoru ile birlikte kategorik bir karar üretir. Böylece rakamlar, jüri için anlamlı bir yoruma dönüşür.
+                </p>
+              </div>
             </motion.div>
           )}
         </div>
       </motion.div>
 
-      {/* LLM Interpretation */}
-      {hasLLM && (
-        <motion.div variants={fadeUp} className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-          {/* AI Assessment */}
-          <div className="glass-card p-6">
-            <div className="flex items-center gap-2 mb-3">
-              <Shield size={16} style={{ color: catColor }} />
-              <h2 className="text-base font-display font-semibold text-white">
-                AI Değerlendirmesi
-              </h2>
-            </div>
-
-            {analysis.category_label_tr && (
-              <p
-                className="text-xl font-bold mb-2"
-                style={{ color: catColor }}
-              >
-                {analysis.category_label_tr}
-              </p>
-            )}
-
-            {confidencePct !== null && (
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-xs text-slate-500">Analiz güveni:</span>
-                <span
-                  className="text-xs font-semibold px-2.5 py-0.5 rounded-full"
-                  style={{
-                    color: confidenceColor,
-                    backgroundColor: `${confidenceColor}20`,
-                    border: `1px solid ${confidenceColor}40`,
-                  }}
-                >
-                  {confidenceLabel} — %{confidencePct}
-                </span>
-              </div>
-            )}
-
-            {analysis.explanation_tr && (
-              <p className="text-sm text-slate-300 leading-relaxed">
-                {analysis.explanation_tr}
-              </p>
-            )}
-          </div>
-
-          {/* Key Observation */}
-          <div className="glass-card p-6">
-            <div className="flex items-center gap-2 mb-3">
-              <Eye size={16} className="text-indigo-400" />
-              <h2 className="text-base font-display font-semibold text-white">
-                En Önemli Gözlem
-              </h2>
-            </div>
-
-            {analysis.key_observation ? (
-              <p className="text-sm text-slate-300 leading-relaxed">
-                {analysis.key_observation}
-              </p>
-            ) : (
-              <p className="text-sm text-slate-500 italic">
-                Gözlem bilgisi mevcut değil
-              </p>
-            )}
-          </div>
+      {/* Metrics Chart */}
+      {analysis.metrics && (
+        <motion.div variants={fadeUp} className="glass-card p-6 mb-4 shadow-xl shadow-purple-500/10">
+          <h2 className="text-sm font-bold tracking-tight text-white mb-5">
+            Metrik Detayları
+          </h2>
+          <MetricChart metrics={analysis.metrics} />
         </motion.div>
       )}
-
-      {/* Alignment Map */}
-      <motion.div variants={fadeUp} className="glass-card p-6 mb-6">
-        <h2 className="text-base font-display font-semibold text-white mb-4">
-          Hizalama Haritası (DTW Path)
-        </h2>
-        <AlignmentMap path={analysis.alignment_map} />
-      </motion.div>
 
       {/* Disclaimer */}
       <motion.div variants={fadeUp}>
