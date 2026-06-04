@@ -4,6 +4,16 @@ markdown# Notaiz — Müzik Benzerlik ve Cover Tespit Sistemi
 cover/aranjman ve potansiyel intihal tespiti yapan 
 hibrit analiz sistemi. TÜBİTAK 2209-A destekli bitirme 
 projesi.
+## Ekran Görüntüleri
+
+### Anasayfa
+![Anasayfa](Anasayfa.png)
+
+### Metrikler
+![Metrikler](Metrikler.png)
+
+### Sonuç
+![Sonuç](Sonuc.png)
 
 ## Mimari
 - **Frontend:** React + Vite + TypeScript (Vercel)
